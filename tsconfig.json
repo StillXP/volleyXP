@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "references": [
+    { "path": "./packages/design-system" },
+    { "path": "./packages/app" }
+  ]
+}

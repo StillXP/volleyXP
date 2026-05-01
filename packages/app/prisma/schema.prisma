@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Enums ---
+
+enum TournamentFormat {
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+}
+
+enum TournamentStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+enum MatchStatus {
+  UPCOMING
+  LIVE
+  COMPLETED
+}
+
+// --- Models ---
+
+model User {
+  id          String       @id @default(cuid())
+  clerkId     String       @unique
+  email       String       @unique
+  name        String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  tournaments Tournament[]
+}
+
+model Tournament {
+  id        String           @id @default(cuid())
+  name      String
+  format    TournamentFormat @default(SINGLE_ELIMINATION)
+  status    TournamentStatus @default(DRAFT)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  ownerId   String
+  owner     User             @relation(fields: [ownerId], references: [id])
+  teams     Team[]
+  matches   Match[]
+}
+
+model Team {
+  id           String             @id @default(cuid())
+  name         String
+  seed         Int?
+  createdAt    DateTime           @default(now())
+  tournamentId String
+  tournament   Tournament         @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  participants MatchParticipant[]
+}
+
+model Match {
+  id           String             @id @default(cuid())
+  round        Int
+  courtName    String?
+  scheduledAt  DateTime?
+  status       MatchStatus        @default(UPCOMING)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tournamentId String
+  tournament   Tournament         @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  participants MatchParticipant[]
+}
+
+model MatchParticipant {
+  id       String  @id @default(cuid())
+  score    Int?
+  isWinner Boolean @default(false)
+  matchId  String
+  match    Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  teamId   String
+  team     Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, teamId])
+}
