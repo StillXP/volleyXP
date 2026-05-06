@@ -24,9 +24,18 @@ export type { MatchCardProps, MatchCardTeam, MatchCardStatus, MatchCardColorSche
 export { Bracket } from './components/Bracket';
 export type { BracketProps, BracketTeam, BracketMatchData, BracketMatchScore } from './components/Bracket';
 
+export { MatchView, MatchViewOverlay } from './components/MatchView';
+export type {
+  MatchViewProps,
+  MatchViewTeam,
+  MatchViewWinnerPath,
+  MatchViewLoserPath,
+  MatchViewOverlayProps,
+} from './components/MatchView';
+
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
-export { defaultTheme } from './styles/theme';
+export { defaultTheme, darkTheme } from './styles/theme';
 export { GlobalStyle } from './styles/GlobalStyle';
 export { ThemeProvider } from 'styled-components';
 export type { DefaultTheme } from 'styled-components';

@@ -15,6 +15,7 @@ import {
   StyledStatusGroup,
   StyledStatusLabel,
   StyledFooterMeta,
+  type TeamRowHighlight,
 } from './MatchCard.styles';
 
 export type MatchCardStatus = 'completed' | 'live' | 'upcoming';
@@ -58,6 +59,8 @@ export interface MatchCardProps {
   onTeamHover?: (teamId: string) => void;
   /** Called when a team row is no longer hovered */
   onTeamLeave?: () => void;
+  /** Renders only the score card rows, without the title or status footer. Width becomes 100%. */
+  scoreOnly?: boolean;
   className?: string;
 }
 
@@ -88,13 +91,18 @@ function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTea
   const isUpcoming = status === 'upcoming';
   const isWinner = status === 'completed' && !!team.winner;
   const opponentScores = opponent?.setScores ?? [];
-  const isHighlighted = !!team.teamId && team.teamId === highlightedTeamId;
+
+  const highlight: TeamRowHighlight = !!team.teamId && team.teamId === highlightedTeamId
+    ? status === 'completed'
+      ? team.winner ? 'win' : 'loss'
+      : 'pending'
+    : false;
 
   return (
     <StyledTeamRow
       $status={status}
       $colorScheme={colorScheme}
-      $highlighted={isHighlighted}
+      $highlight={highlight}
       onMouseEnter={team.teamId ? () => onTeamHover?.(team.teamId!) : undefined}
       onMouseLeave={team.teamId ? onTeamLeave : undefined}
     >
@@ -142,41 +150,44 @@ export function MatchCard({
   highlightedTeamId,
   onTeamHover,
   onTeamLeave,
+  scoreOnly = false,
   className,
 }: MatchCardProps) {
   const isLive = status === 'live';
   const isUpcoming = status === 'upcoming';
 
   return (
-    <StyledMatchCard $colorScheme={colorScheme} className={className}>
-      <StyledTitle $colorScheme={colorScheme}>{title}</StyledTitle>
+    <StyledMatchCard $colorScheme={colorScheme} $scoreOnly={scoreOnly} className={className}>
+      {!scoreOnly && <StyledTitle $colorScheme={colorScheme}>{title}</StyledTitle>}
       <StyledScoreCard $colorScheme={colorScheme}>
         <TeamRow team={team1} opponent={team2} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
         <StyledDivider $colorScheme={colorScheme} />
         <TeamRow team={team2} opponent={team1} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
       </StyledScoreCard>
-      <StyledFooter>
-        <StyledStatusGroup>
-          {status === 'completed' && (
-            <StyledStatusLabel $status="completed">COMPLETED</StyledStatusLabel>
+      {!scoreOnly && (
+        <StyledFooter>
+          <StyledStatusGroup>
+            {status === 'completed' && (
+              <StyledStatusLabel $status="completed">COMPLETED</StyledStatusLabel>
+            )}
+            {isLive && (
+              <>
+                <StyledStatusLabel $status="live">LIVE</StyledStatusLabel>
+                <LiveTvIcon />
+              </>
+            )}
+            {isUpcoming && (
+              <StyledStatusLabel $status="upcoming">UPCOMING</StyledStatusLabel>
+            )}
+          </StyledStatusGroup>
+          {(isLive || isUpcoming) && (
+            <StyledFooterMeta $colorScheme={colorScheme}>
+              {location && <span>{location}</span>}
+              {isUpcoming && startTime && <span>{startTime}</span>}
+            </StyledFooterMeta>
           )}
-          {isLive && (
-            <>
-              <StyledStatusLabel $status="live">LIVE</StyledStatusLabel>
-              <LiveTvIcon />
-            </>
-          )}
-          {isUpcoming && (
-            <StyledStatusLabel $status="upcoming">UPCOMING</StyledStatusLabel>
-          )}
-        </StyledStatusGroup>
-        {(isLive || isUpcoming) && (
-          <StyledFooterMeta $colorScheme={colorScheme}>
-            {location && <span>{location}</span>}
-            {isUpcoming && startTime && <span>{startTime}</span>}
-          </StyledFooterMeta>
-        )}
-      </StyledFooter>
+        </StyledFooter>
+      )}
     </StyledMatchCard>
   );
 }

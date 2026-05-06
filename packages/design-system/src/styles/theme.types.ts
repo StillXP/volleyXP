@@ -2,6 +2,7 @@ import 'styled-components';
 
 declare module 'styled-components' {
   export interface DefaultTheme {
+    mode: 'light' | 'dark';
     color: {
       brand: {
         primary: string;
@@ -12,29 +13,32 @@ declare module 'styled-components' {
         100: string;
         200: string;
         300: string;
+        400: string;
         500: string;
+        600: string;
         700: string;
+        800: string;
         900: string;
       };
       red: {
         0: string; 100: string; 200: string; 300: string;
-        500: string; 700: string; 900: string;
+        400: string; 500: string; 600: string; 700: string; 800: string; 900: string;
       };
       blue: {
         0: string; 100: string; 200: string; 300: string;
-        500: string; 700: string; 900: string;
+        400: string; 500: string; 600: string; 700: string; 800: string; 900: string;
       };
       green: {
         0: string; 100: string; 200: string; 300: string;
-        500: string; 700: string; 900: string;
+        400: string; 500: string; 600: string; 700: string; 800: string; 900: string;
       };
       orange: {
         0: string; 100: string; 200: string; 300: string;
-        500: string; 700: string; 900: string;
+        400: string; 500: string; 600: string; 700: string; 800: string; 900: string;
       };
       yellow: {
         0: string; 100: string; 200: string; 300: string;
-        500: string; 700: string; 900: string;
+        400: string; 500: string; 600: string; 700: string; 800: string; 900: string;
       };
       semantic: {
         error: string;

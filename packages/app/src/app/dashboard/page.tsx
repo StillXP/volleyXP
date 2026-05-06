@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import { trpc } from "../../lib/trpc";
+import { useThemeMode } from "../../lib/ThemeContext";
 
 export default function DashboardPage() {
   const [name, setName] = useState("");
@@ -10,12 +11,30 @@ export default function DashboardPage() {
   const createTournament = trpc.tournament.create.useMutation({
     onSuccess: () => { setName(""); refetch(); },
   });
+  const { mode, toggle } = useThemeMode();
 
   return (
     <div style={{ maxWidth: 600, margin: "2rem auto", padding: "0 1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Tournaments</h1>
-        <UserButton />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <button
+            onClick={toggle}
+            aria-label="Toggle dark mode"
+            style={{
+              background: "none",
+              border: "1px solid currentColor",
+              borderRadius: "6px",
+              padding: "0.25rem 0.6rem",
+              cursor: "pointer",
+              fontSize: "1rem",
+              lineHeight: 1,
+            }}
+          >
+            {mode === "dark" ? "☀️" : "🌙"}
+          </button>
+          <UserButton />
+        </div>
       </div>
 
       <form

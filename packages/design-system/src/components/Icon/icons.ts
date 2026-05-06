@@ -37,7 +37,10 @@ export type IconName =
   | 'user'
   | 'settings'
   | 'menu'
-  | 'loading';
+  | 'loading'
+  | 'clock'
+  | 'map-pin'
+  | 'share';
 
 /** Each entry is one or more `d` attributes for SVG `<path>` elements */
 export const ICON_PATHS: Record<IconName, string[]> = {
@@ -101,5 +104,13 @@ export const ICON_PATHS: Record<IconName, string[]> = {
   menu: ['M3 12h18M3 6h18M3 18h18'],
   loading: [
     'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83',
+  ],
+  clock: ['M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z'],
+  'map-pin': [
+    'M15 10.5a3 3 0 11-6 0 3 3 0 016 0z',
+    'M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z',
+  ],
+  share: [
+    'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z',
   ],
 };

@@ -3,12 +3,21 @@ import type { MatchCardColorScheme, MatchCardStatus } from './MatchCard';
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-export const StyledMatchCard = styled.div<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledMatchCard = styled.div<{ $colorScheme: MatchCardColorScheme; $scoreOnly?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[1]};
-  padding: ${({ theme }) => theme.spacing[2]} 0;
-  width: 280px;
+
+  ${({ $scoreOnly, theme }) =>
+    $scoreOnly
+      ? css`
+          width: 100%;
+          padding: 0;
+        `
+      : css`
+          width: 280px;
+          padding: ${theme.spacing[2]} 0;
+        `}
 `;
 
 // ─── Title ────────────────────────────────────────────────────────────────────
@@ -48,10 +57,12 @@ export const StyledScoreCard = styled.div<{ $colorScheme: MatchCardColorScheme }
 
 // ─── Team row ─────────────────────────────────────────────────────────────────
 
+export type TeamRowHighlight = 'win' | 'loss' | 'pending' | false;
+
 export const StyledTeamRow = styled.div<{
   $status: MatchCardStatus;
   $colorScheme: MatchCardColorScheme;
-  $highlighted: boolean;
+  $highlight: TeamRowHighlight;
 }>`
   display: flex;
   align-items: center;
@@ -61,11 +72,15 @@ export const StyledTeamRow = styled.div<{
   transition: background-color 150ms ease;
   cursor: default;
 
-  ${({ $highlighted, $colorScheme, theme }) =>
-    $highlighted &&
-    css`
-      background-color: ${$colorScheme === 'dark' ? theme.color.green[700] : theme.color.green[0]};
-    `}
+  ${({ $highlight, $colorScheme, theme }) => {
+    if (!$highlight) return null;
+    const bg = {
+      win:     $colorScheme === 'dark' ? theme.color.green[700]   : theme.color.green[0],
+      loss:    $colorScheme === 'dark' ? theme.color.red[700]     : theme.color.red[100],
+      pending: $colorScheme === 'dark' ? theme.color.neutral[700] : theme.color.neutral[200],
+    }[$highlight];
+    return css`background-color: ${bg};`;
+  }}
 `;
 
 export const StyledTeamLeft = styled.div`

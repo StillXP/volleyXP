@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import styled from 'styled-components'
 import { Button, TextField, Dropdown, Bracket } from '@design-system/components'
 import type { BracketTeam, BracketMatchData, DropdownOption } from '@design-system/components'
+import { useThemeMode } from './lib/ThemeContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,20 @@ const BracketPageMeta = styled.p`
   margin-top: ${({ theme }) => theme.spacing[1]};
 `
 
+const ThemeToggle = styled.button`
+  background: none;
+  border: 1px solid ${({ theme }) => theme.color.neutral[300]};
+  border-radius: ${({ theme }) => theme.border.radius.md};
+  padding: ${({ theme }) => theme.spacing[1]} ${({ theme }) => theme.spacing[2]};
+  cursor: pointer;
+  font-size: ${({ theme }) => theme.typography.fontSize.base};
+  line-height: 1;
+  color: ${({ theme }) => theme.color.neutral[700]};
+  &:hover {
+    border-color: ${({ theme }) => theme.color.neutral[500]};
+  }
+`
+
 const BracketScroll = styled.div<{ $isDragging: boolean }>`
   flex: 1;
   overflow: auto;
@@ -285,6 +300,7 @@ const BracketScroll = styled.div<{ $isDragging: boolean }>`
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { mode, toggle } = useThemeMode()
   const [step, setStep] = useState<Step>('team-count')
   const [teamCount, setTeamCount] = useState<number>(8)
   const [teamNames, setTeamNames] = useState<string[]>(() =>
@@ -380,6 +396,9 @@ export default function App() {
           <Button variant="secondary" onClick={() => { setStep('team-count'); setMatchData([]) }}>
             Start Over
           </Button>
+          <ThemeToggle onClick={toggle} aria-label="Toggle dark mode">
+            {mode === 'dark' ? '☀️' : '🌙'}
+          </ThemeToggle>
         </BracketPageHeader>
         <BracketScroll
           ref={scrollRef}
@@ -396,7 +415,14 @@ export default function App() {
   }
 
   return (
-    <WizardPage>
+    <WizardPage style={{ position: 'relative' }}>
+      <ThemeToggle
+        onClick={toggle}
+        aria-label="Toggle dark mode"
+        style={{ position: 'absolute', top: '1rem', right: '1rem' }}
+      >
+        {mode === 'dark' ? '☀️' : '🌙'}
+      </ThemeToggle>
       {step === 'team-count' && (
         <StepTeamCount
           value={teamCount}

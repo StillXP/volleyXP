@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from 'styled-components';
 import { MatchCard } from '../MatchCard/MatchCard';
 import type { MatchCardColorScheme, MatchCardStatus } from '../MatchCard/MatchCard';
+import { MatchView, MatchViewOverlay } from '../MatchView/MatchView';
+import type { MatchViewProps, MatchViewTeam, MatchViewWinnerPath, MatchViewLoserPath } from '../MatchView/MatchView';
 import { defaultTheme } from '../../styles/theme';
 import {
   StyledBracket,
@@ -133,6 +136,8 @@ export interface BracketMatchData {
   team2Score?: BracketMatchScore;
   location?: string;
   startTime?: string;
+  /** URL to a stream or replay shown in the MatchView video button. */
+  videoUrl?: string;
 }
 
 export interface BracketProps {
@@ -191,6 +196,9 @@ function resolveWinner(
   resultMap: Map<string, BracketMatchData>,
   allTeams: BracketTeam[]
 ): InternalSlot {
+  if (feedMatch.team1.team === 'bye' && feedMatch.team2.team === 'bye') {
+    return { team: 'bye' };
+  }
   if (feedMatch.team1.team === 'bye' && feedMatch.team2.team !== 'bye') {
     return feedMatch.team2.team !== null
       ? { team: feedMatch.team2.team }
@@ -431,6 +439,185 @@ function buildMatchCardProps(
   };
 }
 
+// ─── MatchView helpers ────────────────────────────────────────────────────────
+
+/**
+ * Returns the matchId of the match a winner advances to, computed structurally
+ * from the match ID pattern (avoids relying on fromMatchId which is cleared once
+ * a result is known).
+ */
+function getWinnerNextMatchId(
+  matchId: string,
+  wbRoundCount: number,
+  lbRoundCount: number
+): string | undefined {
+  const wb = matchId.match(/^r(\d+)-m(\d+)$/);
+  if (wb) {
+    const r = +wb[1], m = +wb[2];
+    if (r < wbRoundCount) return `r${r + 1}-m${Math.ceil(m / 2)}`;
+    return lbRoundCount > 0 ? 'gf-m1' : undefined;
+  }
+  const lb = matchId.match(/^lb-r(\d+)-m(\d+)$/);
+  if (lb) {
+    const r = +lb[1], m = +lb[2];
+    if (r < lbRoundCount) {
+      const halvingIndex     = Math.floor((r - 1) / 2);
+      const nextHalvingIndex = Math.floor(r / 2);
+      return halvingIndex === nextHalvingIndex
+        ? `lb-r${r + 1}-m${m}`
+        : `lb-r${r + 1}-m${Math.ceil(m / 2)}`;
+    }
+    return 'gf-m1';
+  }
+  return undefined;
+}
+
+/**
+ * Returns the LB match that receives the loser of the given WB match.
+ * Uses the structural pairing rules, so it works even after results are resolved.
+ */
+function getLoserLBMatch(
+  wbMatchId: string,
+  lbRounds: InternalRound[]
+): InternalMatch | undefined {
+  const wb = wbMatchId.match(/^r(\d+)-m(\d+)$/);
+  if (!wb) return undefined;
+  const r = +wb[1], m = +wb[2];
+  if (r === 1) {
+    // Two WB R1 losers pair into one LB R1 match
+    return lbRounds[0]?.matches[Math.ceil(m / 2) - 1];
+  }
+  // WB R{r} loser → LB R{2(r-1)} as team2, 1-to-1 (0-based round index: 2r-3)
+  return lbRounds[2 * r - 3]?.matches[m - 1];
+}
+
+function ordinal(n: number): string {
+  const v = n % 100;
+  const suffix =
+    v === 11 || v === 12 || v === 13 ? 'th'
+    : n % 10 === 1 ? 'st'
+    : n % 10 === 2 ? 'nd'
+    : n % 10 === 3 ? 'rd'
+    : 'th';
+  return `${n}${suffix}`;
+}
+
+/**
+ * Returns the best finishing placement for a team eliminated in the given LB round,
+ * e.g. "7th" for a team that could finish 7th–8th.
+ *
+ * teamsAbove = sum of eliminations in all later LB rounds (each of those placed higher)
+ * bestPlace  = teamsAbove + 3  (+1 for 1st, +1 for 2nd, +1 to step past them)
+ */
+function getLBLoserPlacement(lbRoundNum: number, totalLBRounds: number, wbRoundCount: number): string {
+  const bracketSize = Math.pow(2, wbRoundCount);
+  const matchesInRound = (r: number) =>
+    bracketSize / Math.pow(2, Math.floor((r - 1) / 2) + 2);
+
+  let teamsAbove = 0;
+  for (let r = lbRoundNum + 1; r <= totalLBRounds; r++) {
+    teamsAbove += matchesInRound(r);
+  }
+
+  return ordinal(teamsAbove + 3);
+}
+
+function getBracketSection(matchId: string, eliminationFormat: 'single' | 'double'): string {
+  if (eliminationFormat === 'single') return 'Bracket';
+  if (matchId.startsWith('lb-')) return 'Losers Bracket';
+  if (matchId.startsWith('gf-')) return 'Grand Final';
+  return 'Winners Bracket';
+}
+
+function buildMatchViewData(
+  match: InternalMatch,
+  resultMap: Map<string, BracketMatchData>,
+  titlesByMatchId: Map<string, string>,
+  allMatches: InternalMatch[],
+  wbRoundCount: number,
+  lbRounds: InternalRound[],
+  eliminationFormat: 'single' | 'double',
+  onNavigate: (matchId: string) => void,
+  onClose: () => void
+): MatchViewProps {
+  const result = resultMap.get(match.matchId);
+  const status = result?.status ?? 'upcoming';
+  const isLB = match.matchId.startsWith('lb-');
+  const isGF = match.matchId.startsWith('gf-');
+
+  const resolveTeam = (slot: InternalSlot, score?: BracketMatchScore, winner?: boolean): MatchViewTeam => {
+    if (slot.team && slot.team !== 'bye') {
+      const t = slot.team as BracketTeam;
+      return {
+        name: t.name,
+        seed: t.seed,
+        ...(score?.setScores !== undefined && { setScores: score.setScores }),
+        ...(score?.totalSets !== undefined && { totalSets: score.totalSets }),
+        ...(winner !== undefined && { winner }),
+      };
+    }
+    if (slot.fromMatchId) {
+      const fromTitle = titlesByMatchId.get(slot.fromMatchId) ?? slot.fromMatchId;
+      return { name: `${slot.fromMatchIsLoser ? 'Loser' : 'Winner'} of ${fromTitle}` };
+    }
+    return { name: 'TBD' };
+  };
+
+  const t1IsWinner = !!(result?.winnerId && match.team1.team && match.team1.team !== 'bye' &&
+    (match.team1.team as BracketTeam).id === result.winnerId);
+  const t2IsWinner = !!(result?.winnerId && match.team2.team && match.team2.team !== 'bye' &&
+    (match.team2.team as BracketTeam).id === result.winnerId);
+
+  const team1 = resolveTeam(match.team1, result?.team1Score, t1IsWinner);
+  const team2 = resolveTeam(match.team2, result?.team2Score, t2IsWinner);
+
+  const nextWinnerMatchId = isGF
+    ? undefined
+    : getWinnerNextMatchId(match.matchId, wbRoundCount, lbRounds.length);
+  const nextWinnerMatch = nextWinnerMatchId
+    ? allMatches.find(m => m.matchId === nextWinnerMatchId)
+    : undefined;
+
+  const winnerPath: MatchViewWinnerPath = nextWinnerMatch
+    ? { destination: nextWinnerMatch.title, onNavigate: () => onNavigate(nextWinnerMatch.matchId) }
+    : { destination: ordinal(1) };
+
+  let loserPath: MatchViewLoserPath;
+  if (isGF) {
+    loserPath = { destination: ordinal(2), eliminated: true };
+  } else if (!isLB && eliminationFormat === 'double') {
+    const lbMatch = getLoserLBMatch(match.matchId, lbRounds);
+    loserPath = lbMatch
+      ? { destination: lbMatch.title, onNavigate: () => onNavigate(lbMatch.matchId) }
+      : { destination: 'Losers Bracket' };
+  } else if (isLB) {
+    const lb = match.matchId.match(/^lb-r(\d+)-/);
+    const lbRoundNum = lb ? +lb[1] : 1;
+    loserPath = { destination: getLBLoserPlacement(lbRoundNum, lbRounds.length, wbRoundCount), eliminated: true };
+  } else {
+    // Single-elim: loser of round r in a bracketSize=2^wbRoundCount bracket
+    // finishes at best in position bracketSize/2^r + 1
+    const se = match.matchId.match(/^r(\d+)-/);
+    const r = se ? +se[1] : wbRoundCount;
+    const bestPlace = Math.pow(2, wbRoundCount) / Math.pow(2, r) + 1;
+    loserPath = { destination: ordinal(bestPlace), eliminated: true };
+  }
+
+  return {
+    bracketSection: getBracketSection(match.matchId, eliminationFormat),
+    matchName: match.title,
+    status,
+    team1,
+    team2,
+    ...(result?.startTime !== undefined && { startTime: result.startTime }),
+    ...(result?.location  !== undefined && { location:  result.location  }),
+    ...(result?.videoUrl  !== undefined && { videoUrl:  result.videoUrl  }),
+    winnerPath,
+    loserPath,
+    onClose,
+  };
+}
+
 // ─── Single-elim connector SVG ────────────────────────────────────────────────
 
 function isTeamInMatch(match: InternalMatch, teamId: string): boolean {
@@ -449,10 +636,11 @@ interface ConnectorProps {
 }
 
 function BracketConnector({ roundIndex, matches, colHeight, colorScheme, cardHeight, hoveredTeamMatchIds }: ConnectorProps) {
+  const theme = useTheme();
   const gap = getRoundGap(roundIndex);
   const topPad = getRoundTopPad(roundIndex);
   const pairCount = matches.length / 2;
-  const stroke = colorScheme === 'dark' ? '#FFFFFF' : '#0A0A0A';
+  const stroke = theme.color.neutral[900];
   const highlightStroke = colorScheme === 'dark' ? CONNECTOR_HIGHLIGHT_DARK : CONNECTOR_HIGHLIGHT_LIGHT;
   const xMid = CONNECTOR_WIDTH / 2;
 
@@ -528,9 +716,10 @@ interface LBConnectorProps {
 }
 
 function LBConnector({ lbRoundIndex, matches, colHeight, colorScheme, cardHeight, hoveredTeamMatchIds }: LBConnectorProps) {
+  const theme = useTheme();
   const halvingIndex = Math.floor(lbRoundIndex / 2);
   const nextHalvingIndex = Math.floor((lbRoundIndex + 1) / 2);
-  const stroke = colorScheme === 'dark' ? '#FFFFFF' : '#0A0A0A';
+  const stroke = theme.color.neutral[900];
   const highlightStroke = colorScheme === 'dark' ? CONNECTOR_HIGHLIGHT_DARK : CONNECTOR_HIGHLIGHT_LIGHT;
 
   if (halvingIndex === nextHalvingIndex) {
@@ -594,6 +783,7 @@ function DoubleBracketLayout({
   cardHeight,
   className,
 }: DoubleBracketLayoutProps) {
+  const theme = useTheme();
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
 
   const resultMap = useMemo(
@@ -645,8 +835,27 @@ function DoubleBracketLayout({
     return set;
   }, [hoveredTeamId, wbRounds, lbRounds, gfMatch, resultMap]);
 
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const bracketRef = useRef<HTMLDivElement>(null);
+
+  const allMatches = useMemo(
+    () => [...wbRounds.flatMap(r => r.matches), ...lbRounds.flatMap(r => r.matches), gfMatch],
+    [wbRounds, lbRounds, gfMatch]
+  );
+
+  useEffect(() => {
+    if (!selectedMatchId || !bracketRef.current) return;
+    const el = bracketRef.current.querySelector<HTMLElement>(`[data-match-id="${selectedMatchId}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }, [selectedMatchId]);
+
+  const handleMatchSelect = (matchId: string) => setSelectedMatchId(matchId);
+  const handleOverlayClose = () => setSelectedMatchId(null);
+  const selectedMatch = selectedMatchId ? allMatches.find(m => m.matchId === selectedMatchId) ?? null : null;
+
   return (
-    <StyledDoubleBracketWrapper className={className}>
+    <>
+    <StyledDoubleBracketWrapper ref={bracketRef} className={className}>
 
       {/* ── Winners Bracket + Grand Final ── */}
       <StyledBracketSection>
@@ -659,7 +868,13 @@ function DoubleBracketLayout({
               <StyledRoundGroup key={ri}>
                 <StyledMatchColumn $height={colHeight}>
                   {visibleMatches.map(match => (
-                    <StyledMatchSlot key={match.matchId} $top={getMatchTop(match.matchIndex, ri, cardHeight)}>
+                    <StyledMatchSlot
+                      key={match.matchId}
+                      $top={getMatchTop(match.matchIndex, ri, cardHeight)}
+                      data-match-id={match.matchId}
+                      onClick={() => handleMatchSelect(match.matchId)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={() => setHoveredTeamId(null)} />
                     </StyledMatchSlot>
                   ))}
@@ -684,7 +899,7 @@ function DoubleBracketLayout({
             const gfColHeight = getColumnHeight(1, wbFinalRoundIndex);
             const gfCardTop = getMatchTop(0, wbFinalRoundIndex, cardHeight);
             const highlighted = !!hoveredTeamId && resultMap.get(wbFinal.matchId)?.winnerId === hoveredTeamId;
-            const stroke = colorScheme === 'dark' ? '#FFFFFF' : '#0A0A0A';
+            const stroke = theme.color.neutral[900];
             const highlightStroke = colorScheme === 'dark' ? CONNECTOR_HIGHLIGHT_DARK : CONNECTOR_HIGHLIGHT_LIGHT;
             const y = gfCardTop + CARD_DIVIDER_OFFSET;
             return (
@@ -703,7 +918,12 @@ function DoubleBracketLayout({
                   />
                 </svg>
                 <StyledMatchColumn $height={gfColHeight}>
-                  <StyledMatchSlot $top={gfCardTop}>
+                  <StyledMatchSlot
+                    $top={gfCardTop}
+                    data-match-id={gfMatch.matchId}
+                    onClick={() => handleMatchSelect(gfMatch.matchId)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <MatchCard {...buildMatchCardProps(gfMatch, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={() => setHoveredTeamId(null)} />
                   </StyledMatchSlot>
                 </StyledMatchColumn>
@@ -727,7 +947,13 @@ function DoubleBracketLayout({
                 <StyledRoundGroup key={ri}>
                   <StyledMatchColumn $height={colHeight}>
                     {visibleMatches.map(match => (
-                      <StyledMatchSlot key={match.matchId} $top={getMatchTop(match.matchIndex, halvingIndex, cardHeight)}>
+                      <StyledMatchSlot
+                        key={match.matchId}
+                        $top={getMatchTop(match.matchIndex, halvingIndex, cardHeight)}
+                        data-match-id={match.matchId}
+                        onClick={() => handleMatchSelect(match.matchId)}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={() => setHoveredTeamId(null)} />
                       </StyledMatchSlot>
                     ))}
@@ -750,6 +976,24 @@ function DoubleBracketLayout({
       )}
 
     </StyledDoubleBracketWrapper>
+    {selectedMatch && (
+      <MatchViewOverlay onClose={handleOverlayClose}>
+        <MatchView
+          {...buildMatchViewData(
+            selectedMatch,
+            resultMap,
+            titlesByMatchId,
+            allMatches,
+            wbRounds.length,
+            lbRounds,
+            'double',
+            handleMatchSelect,
+            handleOverlayClose
+          )}
+        />
+      </MatchViewOverlay>
+    )}
+    </>
   );
 }
 
@@ -770,7 +1014,7 @@ export function Bracket({
         matchData={matchData}
         colorScheme={colorScheme}
         cardHeight={cardHeight}
-        className={className}
+        {...(className !== undefined && { className })}
       />
     );
   }
@@ -813,8 +1057,24 @@ export function Bracket({
     return set;
   }, [hoveredTeamId, rounds, resultMap]);
 
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const bracketRef = useRef<HTMLDivElement>(null);
+
+  const allMatches = useMemo(() => rounds.flatMap(r => r.matches), [rounds]);
+
+  useEffect(() => {
+    if (!selectedMatchId || !bracketRef.current) return;
+    const el = bracketRef.current.querySelector<HTMLElement>(`[data-match-id="${selectedMatchId}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }, [selectedMatchId]);
+
+  const handleMatchSelect = (matchId: string) => setSelectedMatchId(matchId);
+  const handleOverlayClose = () => setSelectedMatchId(null);
+  const selectedMatch = selectedMatchId ? allMatches.find(m => m.matchId === selectedMatchId) ?? null : null;
+
   return (
-    <StyledBracket className={className}>
+    <>
+    <StyledBracket ref={bracketRef} className={className}>
       {rounds.map((round, ri) => {
         const colHeight = getColumnHeight(round.matches.length, ri);
         const visibleMatches = round.matches.filter(m => !isByeMatch(m));
@@ -826,6 +1086,9 @@ export function Bracket({
                 <StyledMatchSlot
                   key={match.matchId}
                   $top={getMatchTop(match.matchIndex, ri, cardHeight)}
+                  data-match-id={match.matchId}
+                  onClick={() => handleMatchSelect(match.matchId)}
+                  style={{ cursor: 'pointer' }}
                 >
                   <MatchCard
                     {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)}
@@ -850,5 +1113,23 @@ export function Bracket({
         );
       })}
     </StyledBracket>
+    {selectedMatch && (
+      <MatchViewOverlay onClose={handleOverlayClose}>
+        <MatchView
+          {...buildMatchViewData(
+            selectedMatch,
+            resultMap,
+            titlesByMatchId,
+            allMatches,
+            rounds.length,
+            [],
+            'single',
+            handleMatchSelect,
+            handleOverlayClose
+          )}
+        />
+      </MatchViewOverlay>
+    )}
+    </>
   );
 }
