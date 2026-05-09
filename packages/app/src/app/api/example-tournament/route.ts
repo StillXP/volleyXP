@@ -356,7 +356,7 @@ function generateTeams(teamCount: number): BracketTeam[] {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
 
-  const teamCount = Math.min(32, Math.max(2, parseInt(searchParams.get('teamCount') ?? '8', 10)))
+  const teamCount = Math.min(64, Math.max(2, parseInt(searchParams.get('teamCount') ?? '8', 10)))
   const elimFormat = searchParams.get('elimFormat') === 'double' ? 'double' : 'single'
   const matchFormat = searchParams.get('matchFormat') === '5' ? 5 : 3
 

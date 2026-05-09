@@ -18,7 +18,11 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Andrew\\\\Documents\\\\projects\\\\volley\\\\packages\\\\design-system\\\\src\\\\components\\\\\" -Recurse -Name | Select-Object -First 100)",
       "Bash(awk '{print $NF}')",
       "mcp__plugin_figma_figma__get_screenshot",
-      "mcp__plugin_figma_figma__get_variable_defs"
+      "mcp__plugin_figma_figma__get_variable_defs",
+      "Bash(node -e \"const c = require\\('./node_modules/@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.match\\(/Button|Signed/i\\)\\)\\)\")",
+      "Bash(node -e \"const c = require\\('C:/Users/Andrew/Documents/projects/volley/packages/app/node_modules/@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.match\\(/Button|Signed/i\\)\\)\\)\")",
+      "Bash(node -e \"const keys = Object.keys\\(require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\)\\); console.log\\(keys.filter\\(k => k.match\\(/Show|signed|auth/i\\)\\)\\)\")",
+      "Bash(node -e \"const Show = require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\).Show; console.log\\(Show.toString\\(\\).substring\\(0, 500\\)\\)\")"
     ]
   }
 }

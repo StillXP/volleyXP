@@ -91,12 +91,12 @@ interface StepTeamCountProps {
 function StepTeamCount({ value, onChange, onNext }: StepTeamCountProps) {
   const [raw, setRaw] = React.useState(String(value))
   const parsed = parseInt(raw, 10)
-  const isValid = !isNaN(parsed) && parsed >= 2 && parsed <= 32
+  const isValid = !isNaN(parsed) && parsed >= 2 && parsed <= 64
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setRaw(e.target.value)
     const n = parseInt(e.target.value, 10)
-    if (!isNaN(n) && n >= 2 && n <= 32) onChange(n)
+    if (!isNaN(n) && n >= 2 && n <= 64) onChange(n)
   }
 
   return (
@@ -104,16 +104,16 @@ function StepTeamCount({ value, onChange, onNext }: StepTeamCountProps) {
       <StepHeader>
         <StepLabel>Step 1 of 4</StepLabel>
         <StepTitle>How many teams?</StepTitle>
-        <StepSubtitle>Enter a number between 2 and 32.</StepSubtitle>
+        <StepSubtitle>Enter a number between 2 and 64.</StepSubtitle>
       </StepHeader>
       <TextField
         label="Number of teams"
         type="number"
         min={2}
-        max={32}
+        max={64}
         value={raw}
         onChange={handleChange}
-        errorText={raw !== '' && !isValid ? 'Must be between 2 and 32' : undefined}
+        errorText={raw !== '' && !isValid ? 'Must be between 2 and 64' : undefined}
       />
       <Actions>
         <Button onClick={onNext} disabled={!isValid}>Next</Button>
