@@ -22,7 +22,8 @@
       "Bash(node -e \"const c = require\\('./node_modules/@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.match\\(/Button|Signed/i\\)\\)\\)\")",
       "Bash(node -e \"const c = require\\('C:/Users/Andrew/Documents/projects/volley/packages/app/node_modules/@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.match\\(/Button|Signed/i\\)\\)\\)\")",
       "Bash(node -e \"const keys = Object.keys\\(require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\)\\); console.log\\(keys.filter\\(k => k.match\\(/Show|signed|auth/i\\)\\)\\)\")",
-      "Bash(node -e \"const Show = require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\).Show; console.log\\(Show.toString\\(\\).substring\\(0, 500\\)\\)\")"
+      "Bash(node -e \"const Show = require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\).Show; console.log\\(Show.toString\\(\\).substring\\(0, 500\\)\\)\")",
+      "Bash(Select-String \"Bracket.tsx\")"
     ]
   }
 }

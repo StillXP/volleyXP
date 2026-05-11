@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from 'styled-components';
 import { MatchCard } from '../MatchCard/MatchCard';
 import type { MatchCardColorScheme, MatchCardStatus } from '../MatchCard/MatchCard';
@@ -12,22 +12,26 @@ import {
   StyledMatchSlot,
   StyledDoubleBracketWrapper,
   StyledBracketSection,
-  StyledSectionHeading,
   StyledSectionBody,
+  StyledRoundHeaders,
+  StyledRoundHeader,
+  StyledRoundHeaderLabel,
+  StyledRoundHeaderDivider,
+  StyledRoundHeaderSpacer,
+  CONNECTOR_WIDTH,
 } from './Bracket.styles';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 // Derived from MatchCard rendered dimensions. Update if MatchCard layout changes.
-// CARD_HEIGHT = 8(py) + 24(title) + 4(gap) + 85(scorecard) + 4(gap) + 20(footer) + 8(py) = 153
-const CARD_HEIGHT = 153;
+// CARD_HEIGHT = 8(py) + 85(scorecard) + 4(gap) + 20(footer) + 8(py) = 125
+const CARD_HEIGHT = 125;
 const BASE_GAP = 0;
-const CONNECTOR_WIDTH = 56;
 const CONNECTOR_HIGHLIGHT_LIGHT = defaultTheme.color.green[500];
 const CONNECTOR_HIGHLIGHT_DARK = defaultTheme.color.green[300];
 
 // Vertical offset from the top of a MatchCard to the centre of its team divider line.
-// 8(card py) + 24(title) + 4(gap) + 2(scorecard border) + 40(team row: 8+24+8) + 0.5(divider centre)
-const CARD_DIVIDER_OFFSET = 78.5;
+// 8(card py) + 2(scorecard border) + 40(team row: 8+24+8) + 0.5(divider centre)
+const CARD_DIVIDER_OFFSET = 50.5;
 
 // ─── Single-elim spacing helpers ─────────────────────────────────────────────
 
@@ -59,9 +63,8 @@ function getRoundName(numMatchesInRound: number): string {
   return `Round of ${numMatchesInRound * 2}`;
 }
 
-function getMatchTitle(roundName: string, matchIndex: number, numMatchesInRound: number): string {
-  if (numMatchesInRound === 1) return roundName;
-  return `${roundName} #${matchIndex + 1}`;
+function getMatchTitle(roundName: string, shortId: string): string {
+  return `${roundName} - ${shortId}`;
 }
 
 /** Gap between match cards in a given round (0-indexed). */
@@ -100,9 +103,8 @@ function getLBRoundName(lbRoundIndex: number, totalLBRounds: number): string {
   return `LB Round ${num}`;
 }
 
-function getLBMatchTitle(roundName: string, matchIndex: number, totalMatchesInRound: number): string {
-  if (totalMatchesInRound === 1) return roundName;
-  return `${roundName} #${matchIndex + 1}`;
+function getLBMatchTitle(roundName: string, shortId: string): string {
+  return `${roundName} - ${shortId}`;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -169,6 +171,7 @@ interface InternalSlot {
 
 interface InternalMatch {
   matchId: string;
+  shortId: string;
   roundIndex: number;
   matchIndex: number;
   title: string;
@@ -229,19 +232,25 @@ function generateBracket(
   const teamBySeed = new Map(sorted.map(t => [t.seed, t]));
 
   const rounds: InternalRound[] = [];
+  let wbCount = 0;
 
   const r1Name = getRoundName(bracketSize / 2);
   const r1Matches: InternalMatch[] = [];
   for (let i = 0; i < bracketSize; i += 2) {
     const mi = i / 2;
     const matchId = `r1-m${mi + 1}`;
+    const team1: InternalSlot = { team: teamBySeed.get(seedOrder[i]) ?? 'bye' };
+    const team2: InternalSlot = { team: teamBySeed.get(seedOrder[i + 1]) ?? 'bye' };
+    const isBye = team1.team === 'bye' || team2.team === 'bye';
+    const shortId = isBye ? '' : `W${++wbCount}`;
     r1Matches.push({
       matchId,
+      shortId,
       roundIndex: 0,
       matchIndex: mi,
-      title: getMatchTitle(r1Name, mi, bracketSize / 2),
-      team1: { team: teamBySeed.get(seedOrder[i]) ?? 'bye' },
-      team2: { team: teamBySeed.get(seedOrder[i + 1]) ?? 'bye' },
+      title: getMatchTitle(r1Name, shortId),
+      team1,
+      team2,
     });
   }
   rounds.push({ roundIndex: 0, roundName: r1Name, matches: r1Matches });
@@ -253,13 +262,18 @@ function generateBracket(
     for (let i = 0; i < prev.length; i += 2) {
       const mi = i / 2;
       const matchId = `r${r + 1}-m${mi + 1}`;
+      const team1 = resolveWinner(prev[i], resultMap, sorted);
+      const team2 = resolveWinner(prev[i + 1], resultMap, sorted);
+      const isBye = team1.team === 'bye' || team2.team === 'bye';
+      const shortId = isBye ? '' : `W${++wbCount}`;
       newMatches.push({
         matchId,
+        shortId,
         roundIndex: r,
         matchIndex: mi,
-        title: getMatchTitle(roundName, mi, prev.length / 2),
-        team1: resolveWinner(prev[i], resultMap, sorted),
-        team2: resolveWinner(prev[i + 1], resultMap, sorted),
+        title: getMatchTitle(roundName, shortId),
+        team1,
+        team2,
       });
     }
     rounds.push({ roundIndex: r, roundName, matches: newMatches });
@@ -300,6 +314,7 @@ function generateLBRounds(
 
   const totalLBRounds = 2 * (k - 1);
   const lbRounds: InternalRound[] = [];
+  let lbCount = 0;
 
   for (let lbR = 0; lbR < totalLBRounds; lbR++) {
     const lbRoundNum = lbR + 1; // 1-indexed for matchId generation
@@ -309,19 +324,23 @@ function generateLBRounds(
     if (lbRoundNum === 1) {
       // LB R1: pair WB R1 losers against each other
       const wbR1Matches = wbRounds[0].matches;
-      const numMatchesInRound = wbR1Matches.length / 2;
       matches = [];
       for (let i = 0; i < wbR1Matches.length; i += 2) {
         const mi = i / 2;
         const m1 = wbR1Matches[i];
         const m2 = wbR1Matches[i + 1];
+        const team1: InternalSlot = isByeMatch(m1) ? { team: 'bye' } : resolveLoser(m1, resultMap, allTeams);
+        const team2: InternalSlot = !m2 || isByeMatch(m2) ? { team: 'bye' } : resolveLoser(m2, resultMap, allTeams);
+        const isBye = team1.team === 'bye' || team2.team === 'bye';
+        const shortId = isBye ? '' : `L${++lbCount}`;
         matches.push({
           matchId: `lb-r1-m${mi + 1}`,
+          shortId,
           roundIndex: lbR,
           matchIndex: mi,
-          title: getLBMatchTitle(roundName, mi, numMatchesInRound),
-          team1: isByeMatch(m1) ? { team: 'bye' } : resolveLoser(m1, resultMap, allTeams),
-          team2: !m2 || isByeMatch(m2) ? { team: 'bye' } : resolveLoser(m2, resultMap, allTeams),
+          title: getLBMatchTitle(roundName, shortId),
+          team1,
+          team2,
         });
       }
     } else if (lbRoundNum % 2 === 0) {
@@ -330,33 +349,44 @@ function generateLBRounds(
       const wbDropRoundIndex = lbRoundNum / 2;
       const wbDropMatches = wbRounds[wbDropRoundIndex].matches;
       const prevLBRound = lbRounds[lbR - 1];
-      matches = prevLBRound.matches.map((lbPrev, i) => {
+      matches = [];
+      for (let i = 0; i < prevLBRound.matches.length; i++) {
+        const lbPrev = prevLBRound.matches[i];
         const wbDrop = wbDropMatches[i];
-        return {
+        const team1 = resolveWinner(lbPrev, resultMap, allTeams);
+        const team2: InternalSlot = !wbDrop || isByeMatch(wbDrop) ? { team: 'bye' } : resolveLoser(wbDrop, resultMap, allTeams);
+        const isBye = team1.team === 'bye' || team2.team === 'bye';
+        const shortId = isBye ? '' : `L${++lbCount}`;
+        matches.push({
           matchId: `lb-r${lbRoundNum}-m${i + 1}`,
+          shortId,
           roundIndex: lbR,
           matchIndex: i,
-          title: getLBMatchTitle(roundName, i, prevLBRound.matches.length),
-          team1: resolveWinner(lbPrev, resultMap, allTeams),
-          team2: !wbDrop || isByeMatch(wbDrop) ? { team: 'bye' } : resolveLoser(wbDrop, resultMap, allTeams),
-        };
-      });
+          title: getLBMatchTitle(roundName, shortId),
+          team1,
+          team2,
+        });
+      }
     } else {
       // Odd LB round > 1: LB survivors play each other (bracket halves).
       const prevLBRound = lbRounds[lbR - 1];
-      const numMatchesInRound = prevLBRound.matches.length / 2;
       matches = [];
       for (let i = 0; i < prevLBRound.matches.length; i += 2) {
         const mi = i / 2;
         const m1 = prevLBRound.matches[i];
         const m2 = prevLBRound.matches[i + 1];
+        const team1: InternalSlot = !m1 ? { team: 'bye' } : resolveWinner(m1, resultMap, allTeams);
+        const team2: InternalSlot = !m2 ? { team: 'bye' } : resolveWinner(m2, resultMap, allTeams);
+        const isBye = team1.team === 'bye' || team2.team === 'bye';
+        const shortId = isBye ? '' : `L${++lbCount}`;
         matches.push({
           matchId: `lb-r${lbRoundNum}-m${mi + 1}`,
+          shortId,
           roundIndex: lbR,
           matchIndex: mi,
-          title: getLBMatchTitle(roundName, mi, numMatchesInRound),
-          team1: !m1 ? { team: 'bye' } : resolveWinner(m1, resultMap, allTeams),
-          team2: !m2 ? { team: 'bye' } : resolveWinner(m2, resultMap, allTeams),
+          title: getLBMatchTitle(roundName, shortId),
+          team1,
+          team2,
         });
       }
     }
@@ -377,6 +407,7 @@ function buildGrandFinalMatch(
   const lbFinal = lbRounds.length > 0 ? lbRounds[lbRounds.length - 1].matches[0] : null;
   return {
     matchId: 'gf-m1',
+    shortId: 'GF',
     roundIndex: 0,
     matchIndex: 0,
     title: 'Grand Final',
@@ -413,7 +444,7 @@ function buildMatchCardProps(
   const t2Id = t2Display.teamId;
 
   return {
-    title: match.title,
+    matchId: match.shortId,
     status,
     colorScheme,
     team1: {
@@ -859,7 +890,21 @@ function DoubleBracketLayout({
 
       {/* ── Winners Bracket + Grand Final ── */}
       <StyledBracketSection>
-        <StyledSectionHeading $colorScheme={colorScheme}>Winners Bracket</StyledSectionHeading>
+        <StyledRoundHeaders>
+          {wbRounds.map((round, ri) => (
+            <Fragment key={ri}>
+              <StyledRoundHeader>
+                <StyledRoundHeaderLabel $colorScheme={colorScheme}>{round.roundName}</StyledRoundHeaderLabel>
+                <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+              </StyledRoundHeader>
+              <StyledRoundHeaderSpacer />
+            </Fragment>
+          ))}
+          <StyledRoundHeader>
+            <StyledRoundHeaderLabel $colorScheme={colorScheme}>Grand Final</StyledRoundHeaderLabel>
+            <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+          </StyledRoundHeader>
+        </StyledRoundHeaders>
         <StyledSectionBody>
           {wbRounds.map((round, ri) => {
             const colHeight = getColumnHeight(round.matches.length, ri);
@@ -936,7 +981,22 @@ function DoubleBracketLayout({
       {/* ── Losers Bracket ── */}
       {lbRounds.length > 0 && (
         <StyledBracketSection>
-          <StyledSectionHeading $colorScheme={colorScheme}>Losers Bracket</StyledSectionHeading>
+          <StyledRoundHeaders>
+            {(() => {
+              const visibleRounds = lbRounds
+                .map((round, ri) => ({ round, ri }))
+                .filter(({ round }) => round.matches.some(m => !isByeMatch(m)));
+              return visibleRounds.map(({ round, ri }, vi) => (
+                <Fragment key={ri}>
+                  <StyledRoundHeader>
+                    <StyledRoundHeaderLabel $colorScheme={colorScheme}>{round.roundName}</StyledRoundHeaderLabel>
+                    <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+                  </StyledRoundHeader>
+                  {vi < visibleRounds.length - 1 && <StyledRoundHeaderSpacer />}
+                </Fragment>
+              ));
+            })()}
+          </StyledRoundHeaders>
           <StyledSectionBody>
             {lbRounds.map((round, ri) => {
               const halvingIndex = Math.floor(ri / 2);
@@ -1075,43 +1135,56 @@ export function Bracket({
   return (
     <>
     <StyledBracket ref={bracketRef} className={className}>
-      {rounds.map((round, ri) => {
-        const colHeight = getColumnHeight(round.matches.length, ri);
-        const visibleMatches = round.matches.filter(m => !isByeMatch(m));
+      <StyledRoundHeaders>
+        {rounds.map((round, ri) => (
+          <Fragment key={ri}>
+            <StyledRoundHeader>
+              <StyledRoundHeaderLabel $colorScheme={colorScheme}>{round.roundName}</StyledRoundHeaderLabel>
+              <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+            </StyledRoundHeader>
+            {ri < rounds.length - 1 && <StyledRoundHeaderSpacer />}
+          </Fragment>
+        ))}
+      </StyledRoundHeaders>
+      <StyledSectionBody>
+        {rounds.map((round, ri) => {
+          const colHeight = getColumnHeight(round.matches.length, ri);
+          const visibleMatches = round.matches.filter(m => !isByeMatch(m));
 
-        return (
-          <StyledRoundGroup key={ri}>
-            <StyledMatchColumn $height={colHeight}>
-              {visibleMatches.map(match => (
-                <StyledMatchSlot
-                  key={match.matchId}
-                  $top={getMatchTop(match.matchIndex, ri, cardHeight)}
-                  data-match-id={match.matchId}
-                  onClick={() => handleMatchSelect(match.matchId)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <MatchCard
-                    {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)}
-                    highlightedTeamId={hoveredTeamId ?? undefined}
-                    onTeamHover={setHoveredTeamId}
-                    onTeamLeave={() => setHoveredTeamId(null)}
-                  />
-                </StyledMatchSlot>
-              ))}
-            </StyledMatchColumn>
-            {ri < rounds.length - 1 && (
-              <BracketConnector
-                roundIndex={ri}
-                matches={round.matches}
-                colHeight={colHeight}
-                colorScheme={colorScheme}
-                cardHeight={cardHeight}
-                hoveredTeamMatchIds={hoveredTeamMatchIds}
-              />
-            )}
-          </StyledRoundGroup>
-        );
-      })}
+          return (
+            <StyledRoundGroup key={ri}>
+              <StyledMatchColumn $height={colHeight}>
+                {visibleMatches.map(match => (
+                  <StyledMatchSlot
+                    key={match.matchId}
+                    $top={getMatchTop(match.matchIndex, ri, cardHeight)}
+                    data-match-id={match.matchId}
+                    onClick={() => handleMatchSelect(match.matchId)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <MatchCard
+                      {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)}
+                      highlightedTeamId={hoveredTeamId ?? undefined}
+                      onTeamHover={setHoveredTeamId}
+                      onTeamLeave={() => setHoveredTeamId(null)}
+                    />
+                  </StyledMatchSlot>
+                ))}
+              </StyledMatchColumn>
+              {ri < rounds.length - 1 && (
+                <BracketConnector
+                  roundIndex={ri}
+                  matches={round.matches}
+                  colHeight={colHeight}
+                  colorScheme={colorScheme}
+                  cardHeight={cardHeight}
+                  hoveredTeamMatchIds={hoveredTeamMatchIds}
+                />
+              )}
+            </StyledRoundGroup>
+          );
+        })}
+      </StyledSectionBody>
     </StyledBracket>
     {selectedMatch && (
       <MatchViewOverlay onClose={handleOverlayClose}>

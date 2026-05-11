@@ -12,10 +12,19 @@ const LAST_NAMES = [
   'Porter', 'Reid', 'Shaw', 'Turner', 'Underwood', 'Vargas', 'Walker', 'Yates',
   'Avery', 'Blake', 'Cruz', 'Dunn', 'Ellis', 'Flynn', 'Grant', 'Hart',
   'Irwin', 'James', 'Knox', 'Lane', 'Mills', 'Norman', 'Ortiz', 'Park',
+  'Abbas', 'Bauer', 'Carvalho', 'Delgado', 'Espinoza', 'Ferreira', 'Gupta', 'Hernandez',
+  'Ibrahim', 'Johansson', 'Kaur', 'Lindqvist', 'Moreau', 'Nguyen', 'Osei', 'Petrov',
+  'Quiroga', 'Russo', 'Silva', 'Tanaka', 'Ullah', 'Vasquez', 'Watanabe', 'Xu',
+  'Yamamoto', 'Zhu', 'Adeyemi', 'Bergman', 'Castillo', 'Dubois', 'Elias', 'Fahim',
+  'Guerrero', 'Hakobyan', 'Ismail', 'Joao', 'Kovacs', 'Larsson', 'Mendez', 'Nkosi',
+  'Ochoa', 'Padilla', 'Qureshi', 'Reyes', 'Sousa', 'Tran', 'Uzun', 'Vieira',
+  'Wong', 'Yilmaz', 'Zamora', 'Abebe', 'Brandt', 'Choudhury', 'Das', 'Eriksson',
+  'Fonseca', 'Gomes', 'Haugen', 'Ito', 'Jain', 'Kuznetsov', 'Lima', 'Madsen',
 ]
 
 const COURTS = ['Court 1', 'Court 2', 'Court 3', 'Court 4']
 const TIMES = ['9:00 AM', '10:30 AM', '12:00 PM', '1:30 PM', '3:00 PM', '4:30 PM']
+const STREAM_BASE = 'https://stream.volley.tv'
 
 // ─── Bracket helpers ──────────────────────────────────────────────────────────
 
@@ -183,6 +192,7 @@ function simulateDoubleElim(teamCount: number): {
 function buildCompleted(matchId: string, sim: MatchSimResult, matchFormat: 3 | 5, matchIndex: number): BracketMatchData {
   const scores = generateCompletedScores(matchFormat)
   const t1Wins = sim.team1Seed === sim.winnerSeed
+  const hasReplay = Math.random() < 0.65
   return {
     matchId,
     status: 'completed',
@@ -190,12 +200,20 @@ function buildCompleted(matchId: string, sim: MatchSimResult, matchFormat: 3 | 5
     team1Score: t1Wins ? scores.winner : scores.loser,
     team2Score: t1Wins ? scores.loser : scores.winner,
     location: COURTS[(matchIndex - 1) % COURTS.length],
+    ...(hasReplay && { videoUrl: `${STREAM_BASE}/replay/${matchId}` }),
   }
 }
 
 function buildLive(matchId: string): BracketMatchData {
   const { team1Score, team2Score } = generateLiveScores()
-  return { matchId, status: 'live', team1Score, team2Score, location: COURTS[0] }
+  return {
+    matchId,
+    status: 'live',
+    team1Score,
+    team2Score,
+    location: COURTS[0],
+    videoUrl: `${STREAM_BASE}/live/${matchId}`,
+  }
 }
 
 function buildUpcoming(matchId: string, matchIndex: number): BracketMatchData {
@@ -273,6 +291,8 @@ function generateSingleElimMatchData(teamCount: number, matchFormat: 3 | 5): Bra
 
   for (let r = 1; r <= numRounds; r++) {
     const count = slots / Math.pow(2, r)
+    const isCurrent = r === completedRounds + 1
+    const liveCount = isCurrent ? randomInt(1, Math.min(count, COURTS.length)) : 0
     for (let m = 1; m <= count; m++) {
       const matchId = `r${r}-m${m}`
       const sim = simResults.get(matchId)
@@ -280,8 +300,8 @@ function generateSingleElimMatchData(teamCount: number, matchFormat: 3 | 5): Bra
 
       if (r <= completedRounds) {
         matchData.push(buildCompleted(matchId, sim, matchFormat, m))
-      } else if (r === completedRounds + 1) {
-        matchData.push(m === 1 ? buildLive(matchId) : buildUpcoming(matchId, m))
+      } else if (isCurrent) {
+        matchData.push(m <= liveCount ? buildLive(matchId) : buildUpcoming(matchId, m))
       }
       // Future rounds: no entry — bracket defaults to upcoming
     }
@@ -309,12 +329,13 @@ function generateDoubleElimMatchData(teamCount: number, matchFormat: 3 | 5): Bra
   for (let r = 1; r <= numWBRounds; r++) {
     const count = slots / Math.pow(2, r)
     const isCurrent = r === completedWBRounds + 1 && !allWBDone
+    const liveCount = isCurrent ? randomInt(1, Math.min(count, COURTS.length)) : 0
     for (let m = 1; m <= count; m++) {
       const matchId = `r${r}-m${m}`
       const sim = simResults.get(matchId)
       if (!sim) continue
       if (r <= completedWBRounds) matchData.push(buildCompleted(matchId, sim, matchFormat, m))
-      else if (isCurrent) matchData.push(m === 1 ? buildLive(matchId) : buildUpcoming(matchId, m))
+      else if (isCurrent) matchData.push(m <= liveCount ? buildLive(matchId) : buildUpcoming(matchId, m))
     }
   }
 
@@ -326,7 +347,8 @@ function generateDoubleElimMatchData(teamCount: number, matchFormat: 3 | 5): Bra
       const sim = simResults.get(matchId)
       if (!sim) continue
       if (lbR <= completedLBRounds) matchData.push(buildCompleted(matchId, sim, matchFormat, m))
-      // Upcoming LB matches: no entry needed
+      // Current LB round is always an even (drop-in) round whose teams depend on the
+      // current WB round's losers — unresolvable until WB finishes, so no entry here.
     }
   }
 

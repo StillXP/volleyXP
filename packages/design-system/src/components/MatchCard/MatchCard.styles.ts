@@ -20,17 +20,46 @@ export const StyledMatchCard = styled.div<{ $colorScheme: MatchCardColorScheme; 
         `}
 `;
 
-// ─── Title ────────────────────────────────────────────────────────────────────
+// ─── Score card wrapper + match ID marker ─────────────────────────────────────
 
-export const StyledTitle = styled.p<{ $colorScheme: MatchCardColorScheme }>`
-  margin: 0;
+export const StyledScoreCardWrapper = styled.div`
+  position: relative;
+  width: 100%;
+`;
+
+export const StyledMatchIdMarker = styled.div<{ $colorScheme: MatchCardColorScheme }>`
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 2px ${({ theme }) => theme.spacing[1]};
+  border: ${({ theme }) => theme.border.width.default} solid;
+  border-radius: ${({ theme }) => theme.border.radius.sm};
   font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.base};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
+  font-size: ${({ theme }) => theme.typography.fontSize.xs};
+  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
   line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  text-transform: uppercase;
+  text-align: center;
   white-space: nowrap;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
+
+  ${({ $colorScheme, theme }) =>
+    $colorScheme === 'dark'
+      ? css`
+          background-color: ${theme.color.neutral[0]};
+          border-color: ${theme.color.neutral[900]};
+          color: ${theme.color.neutral[900]};
+        `
+      : css`
+          background-color: ${theme.color.neutral[0]};
+          border-color: ${theme.color.neutral[900]};
+          color: ${theme.color.neutral[900]};
+        `}
 `;
 
 // ─── Score card ───────────────────────────────────────────────────────────────

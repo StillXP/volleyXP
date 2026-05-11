@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import { Button, TextField, Dropdown, Bracket } from '@design-system/components'
 import type { BracketTeam, BracketMatchData, DropdownOption } from '@design-system/components'
@@ -240,6 +240,44 @@ function StepMatchFormat({ value, onChange, onBack, onGenerate }: StepMatchForma
 
 // ─── Bracket view ─────────────────────────────────────────────────────────────
 
+const ZOOM_MIN = 0.25
+const ZOOM_MAX = 2
+const ZOOM_STEP = 0.1
+
+function getDefaultZoom(): number {
+  if (typeof window === 'undefined') return 1
+  if (window.innerWidth < 480) return 0.5
+  if (window.innerWidth < 768) return 0.65
+  return 1
+}
+
+const ZoomOutIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+    <line x1="7" y1="11" x2="15" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <line x1="16.5" y1="16.5" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
+
+const ZoomInIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+    <line x1="7" y1="11" x2="15" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <line x1="11" y1="7" x2="11" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <line x1="16.5" y1="16.5" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+)
+
+const ZoomControls = styled.div`
+  position: fixed;
+  bottom: ${({ theme }) => theme.spacing[6]};
+  right: ${({ theme }) => theme.spacing[6]};
+  display: flex;
+  gap: ${({ theme }) => theme.spacing[2]};
+  align-items: center;
+  z-index: 10;
+`
+
 const BracketPage = styled.div`
   height: 100vh;
   overflow: hidden;
@@ -291,6 +329,7 @@ const BracketScroll = styled.div<{ $isDragging: boolean }>`
   padding: ${({ theme }) => theme.spacing[8]};
   cursor: ${({ $isDragging }) => ($isDragging ? 'grabbing' : 'grab')};
   user-select: none;
+  touch-action: pan-x pan-y;
 
   & > * {
     pointer-events: ${({ $isDragging }) => ($isDragging ? 'none' : 'auto')};
@@ -310,6 +349,7 @@ export default function App() {
   const [matchFormat, setMatchFormat] = useState<3 | 5>(3)
   const [matchData, setMatchData] = useState<BracketMatchData[]>([])
   const [isLoadingExample, setIsLoadingExample] = useState(false)
+  const [zoom, setZoom] = useState(1)
 
   const handleLoadExample = useCallback(async () => {
     setIsLoadingExample(true)
@@ -338,6 +378,15 @@ export default function App() {
     })
   }, [])
 
+  const handleZoomIn = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, parseFloat((z + ZOOM_STEP).toFixed(2)))), [])
+  const handleZoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, parseFloat((z - ZOOM_STEP).toFixed(2)))), [])
+  const handleZoomReset = useCallback(() => setZoom(getDefaultZoom()), [])
+
+  const handleGenerateBracket = useCallback(() => {
+    setZoom(getDefaultZoom())
+    setStep('bracket')
+  }, [])
+
   const bracketTeams: BracketTeam[] = teamNames.map((name, i) => ({
     id: `team-${i + 1}`,
     name: name.trim() || `Team${i + 1}`,
@@ -348,6 +397,116 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false)
   const isDraggingRef = useRef(false)
   const dragOriginRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null)
+
+  const zoomRef = useRef(zoom)
+  useEffect(() => { zoomRef.current = zoom }, [zoom])
+
+  const bracketZoomRef = useRef<HTMLDivElement>(null)
+  const pinchStartDistRef = useRef<number | null>(null)
+  const pinchStartZoomRef = useRef<number>(1)
+
+  useEffect(() => {
+    if (step !== 'bracket') return
+    const el = scrollRef.current
+    if (!el) return
+
+    const { paddingLeft, paddingTop } = getComputedStyle(el)
+    const padL = parseFloat(paddingLeft)
+    const padT = parseFloat(paddingTop)
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      pinchStartDistRef.current = Math.sqrt(dx * dx + dy * dy)
+      pinchStartZoomRef.current = zoomRef.current
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || pinchStartDistRef.current === null) return
+      e.preventDefault()
+
+      const t0 = e.touches[0]
+      const t1 = e.touches[1]
+
+      const dx = t0.clientX - t1.clientX
+      const dy = t0.clientY - t1.clientY
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN,
+        pinchStartZoomRef.current * (dist / pinchStartDistRef.current)
+      ))
+
+      // Pinch midpoint relative to the scroll container's top-left
+      const rect = el.getBoundingClientRect()
+      const localCx = (t0.clientX + t1.clientX) / 2 - rect.left
+      const localCy = (t0.clientY + t1.clientY) / 2 - rect.top
+
+      // Content coordinates under the pinch at the current zoom
+      const contentX = (el.scrollLeft + localCx - padL) / zoomRef.current
+      const contentY = (el.scrollTop  + localCy - padT) / zoomRef.current
+
+      // Apply zoom then re-anchor scroll so the pinch point stays fixed
+      zoomRef.current = newZoom
+      if (bracketZoomRef.current) bracketZoomRef.current.style.zoom = String(newZoom)
+      el.scrollLeft = padL + contentX * newZoom - localCx
+      el.scrollTop  = padT + contentY * newZoom - localCy
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        pinchStartDistRef.current = null
+        const rounded = parseFloat(zoomRef.current.toFixed(2))
+        zoomRef.current = rounded
+        if (bracketZoomRef.current) bracketZoomRef.current.style.zoom = String(rounded)
+        setZoom(rounded)
+      }
+    }
+
+    let wheelCommitTimer: ReturnType<typeof setTimeout> | null = null
+
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+
+      // Normalise deltaY to pixels across deltaMode values
+      const delta = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaMode === 2 ? e.deltaY * 300 : e.deltaY
+      const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomRef.current * Math.pow(0.999, delta)))
+
+      // Zoom toward the cursor position
+      const rect = el.getBoundingClientRect()
+      const localCx = e.clientX - rect.left
+      const localCy = e.clientY - rect.top
+      const contentX = (el.scrollLeft + localCx - padL) / zoomRef.current
+      const contentY = (el.scrollTop  + localCy - padT) / zoomRef.current
+
+      zoomRef.current = newZoom
+      if (bracketZoomRef.current) bracketZoomRef.current.style.zoom = String(newZoom)
+      el.scrollLeft = padL + contentX * newZoom - localCx
+      el.scrollTop  = padT + contentY * newZoom - localCy
+
+      // Commit to React state after the gesture settles
+      if (wheelCommitTimer) clearTimeout(wheelCommitTimer)
+      wheelCommitTimer = setTimeout(() => {
+        const rounded = parseFloat(zoomRef.current.toFixed(2))
+        zoomRef.current = rounded
+        if (bracketZoomRef.current) bracketZoomRef.current.style.zoom = String(rounded)
+        setZoom(rounded)
+      }, 150)
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('wheel', onWheel)
+      if (wheelCommitTimer) clearTimeout(wheelCommitTimer)
+    }
+  }, [step])
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
@@ -393,7 +552,7 @@ export default function App() {
           <Button variant="secondary" onClick={handleLoadExample} disabled={isLoadingExample}>
             {isLoadingExample ? 'Loading…' : 'Load example data'}
           </Button>
-          <Button variant="secondary" onClick={() => { setStep('team-count'); setMatchData([]) }}>
+          <Button variant="secondary" onClick={() => { setStep('team-count'); setMatchData([]); setZoom(getDefaultZoom()) }}>
             Start Over
           </Button>
           <ThemeToggle onClick={toggle} aria-label="Toggle dark mode">
@@ -408,8 +567,21 @@ export default function App() {
           onMouseUp={stopDrag}
           onMouseLeave={stopDrag}
         >
-          <Bracket teams={bracketTeams} eliminationFormat={elimFormat} matchData={matchData} />
+          <div ref={bracketZoomRef} style={{ zoom }}>
+            <Bracket teams={bracketTeams} eliminationFormat={elimFormat} matchData={matchData} />
+          </div>
         </BracketScroll>
+        <ZoomControls>
+          <Button variant="secondary" size="sm" onClick={handleZoomOut} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out">
+            <ZoomOutIcon />
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleZoomIn} disabled={zoom >= ZOOM_MAX} aria-label="Zoom in">
+            <ZoomInIcon />
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleZoomReset} disabled={zoom === 1}>
+            Reset
+          </Button>
+        </ZoomControls>
       </BracketPage>
     )
   }
@@ -451,7 +623,7 @@ export default function App() {
           value={matchFormat}
           onChange={setMatchFormat}
           onBack={() => setStep('elim-format')}
-          onGenerate={() => setStep('bracket')}
+          onGenerate={handleGenerateBracket}
         />
       )}
     </WizardPage>

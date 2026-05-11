@@ -1,6 +1,7 @@
 import {
   StyledMatchCard,
-  StyledTitle,
+  StyledScoreCardWrapper,
+  StyledMatchIdMarker,
   StyledScoreCard,
   StyledTeamRow,
   StyledTeamLeft,
@@ -39,8 +40,8 @@ export interface MatchCardTeam {
 }
 
 export interface MatchCardProps {
-  /** Match round label (e.g. "WB 1 – Quarterfinal 1") */
-  title?: string;
+  /** Short match identifier shown as a badge on the left (e.g. "1", "L3", "GF") */
+  matchId?: string;
   /** Current match status */
   status?: MatchCardStatus;
   /** Light or dark color scheme */
@@ -53,12 +54,14 @@ export interface MatchCardProps {
   location?: string;
   /** Scheduled start time (shown for upcoming matches) */
   startTime?: string;
+  /** Live stream URL — when provided, the TV icon is shown on live matches */
+  videoUrl?: string;
   /** ID of the team whose rows should be highlighted across all cards */
-  highlightedTeamId?: string;
+  highlightedTeamId?: string | undefined;
   /** Called when a team row is hovered — passes the team's ID */
-  onTeamHover?: (teamId: string) => void;
+  onTeamHover?: ((teamId: string) => void) | undefined;
   /** Called when a team row is no longer hovered */
-  onTeamLeave?: () => void;
+  onTeamLeave?: (() => void) | undefined;
   /** Renders only the score card rows, without the title or status footer. Width becomes 100%. */
   scoreOnly?: boolean;
   className?: string;
@@ -82,9 +85,9 @@ interface TeamRowProps {
   opponent?: MatchCardTeam;
   status: MatchCardStatus;
   colorScheme: MatchCardColorScheme;
-  highlightedTeamId?: string;
-  onTeamHover?: (teamId: string) => void;
-  onTeamLeave?: () => void;
+  highlightedTeamId?: string | undefined;
+  onTeamHover?: ((teamId: string) => void) | undefined;
+  onTeamLeave?: (() => void) | undefined;
 }
 
 function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTeamHover, onTeamLeave }: TeamRowProps) {
@@ -140,13 +143,14 @@ function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTea
 }
 
 export function MatchCard({
-  title = 'WB 1 – Quarterfinal 1',
+  matchId,
   status = 'completed',
   colorScheme = 'light',
   team1 = { seed: 12, name: 'Team 1', setScores: [19, 12], totalSets: 0 },
   team2 = { name: 'Team 2', setScores: [21, 21], totalSets: 2, winner: true },
   location = 'Court 2',
   startTime = '12:00 PM',
+  videoUrl,
   highlightedTeamId,
   onTeamHover,
   onTeamLeave,
@@ -158,12 +162,16 @@ export function MatchCard({
 
   return (
     <StyledMatchCard $colorScheme={colorScheme} $scoreOnly={scoreOnly} className={className}>
-      {!scoreOnly && <StyledTitle $colorScheme={colorScheme}>{title}</StyledTitle>}
-      <StyledScoreCard $colorScheme={colorScheme}>
-        <TeamRow team={team1} opponent={team2} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
-        <StyledDivider $colorScheme={colorScheme} />
-        <TeamRow team={team2} opponent={team1} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
-      </StyledScoreCard>
+      <StyledScoreCardWrapper>
+        {!scoreOnly && matchId && (
+          <StyledMatchIdMarker $colorScheme={colorScheme}>{matchId}</StyledMatchIdMarker>
+        )}
+        <StyledScoreCard $colorScheme={colorScheme}>
+          <TeamRow team={team1} opponent={team2} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
+          <StyledDivider $colorScheme={colorScheme} />
+          <TeamRow team={team2} opponent={team1} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
+        </StyledScoreCard>
+      </StyledScoreCardWrapper>
       {!scoreOnly && (
         <StyledFooter>
           <StyledStatusGroup>
@@ -173,7 +181,7 @@ export function MatchCard({
             {isLive && (
               <>
                 <StyledStatusLabel $status="live">LIVE</StyledStatusLabel>
-                <LiveTvIcon />
+                {videoUrl && <LiveTvIcon />}
               </>
             )}
             {isUpcoming && (

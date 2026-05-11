@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '../Icon';
 import { Button } from '../Button';
 import { Link } from '../Link';
@@ -328,7 +329,7 @@ export function MatchViewOverlay({ onClose, children }: MatchViewOverlayProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <StyledOverlay
       onClick={handleBackdropClick}
       onMouseDown={e => e.stopPropagation()}
@@ -336,6 +337,7 @@ export function MatchViewOverlay({ onClose, children }: MatchViewOverlayProps) {
       onMouseUp={e => e.stopPropagation()}
     >
       {children}
-    </StyledOverlay>
+    </StyledOverlay>,
+    document.body
   );
 }
