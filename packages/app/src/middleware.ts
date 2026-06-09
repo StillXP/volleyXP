@@ -1,14 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/sign-in", "/sign-up", "/auth/callback"];
-const PUBLIC_PREFIXES = ["/api/trpc", "/api/example-tournament"];
-
-function isPublicRoute(pathname: string) {
-  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
-  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
-  return false;
-}
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
