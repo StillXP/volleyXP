@@ -25,9 +25,7 @@ export async function middleware(request: NextRequest) {
   );
 
   // Refresh session — do NOT remove this call
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  await supabase.auth.getUser();
 
   return supabaseResponse;
 }
