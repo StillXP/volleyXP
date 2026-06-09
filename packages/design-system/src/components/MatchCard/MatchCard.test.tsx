@@ -6,8 +6,8 @@ const team1 = { seed: 1, name: 'Team Alpha', setScores: [21, 15], totalSets: 2, 
 const team2 = { seed: 2, name: 'Team Beta', setScores: [18, 21], totalSets: 1 };
 
 describe('MatchCard', () => {
-  it('renders the match title', () => {
-    render(<MatchCard title="QF1" team1={team1} team2={team2} />);
+  it('renders the match id', () => {
+    render(<MatchCard matchId="QF1" team1={team1} team2={team2} />);
     expect(screen.getByText('QF1')).toBeInTheDocument();
   });
 

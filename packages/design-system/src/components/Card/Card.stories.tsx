@@ -42,19 +42,14 @@ export const WithImage: Story = {
 
 export const NoDescription: Story = {
   args: {
-    description: undefined,
+    tags: ['Design Tokens'],
   },
 };
 
 export const NoTags: Story = {
   args: {
-    tags: undefined,
+    description: 'Developed an automated token system',
   },
 };
 
-export const TitleOnly: Story = {
-  args: {
-    description: undefined,
-    tags: undefined,
-  },
-};
+export const TitleOnly: Story = {};

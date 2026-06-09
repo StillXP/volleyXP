@@ -684,12 +684,6 @@ function buildMatchViewData(
 
 // ─── Single-elim connector SVG ────────────────────────────────────────────────
 
-function isTeamInMatch(match: InternalMatch, teamId: string): boolean {
-  const t1 = match.team1.team;
-  const t2 = match.team2.team;
-  return (!!t1 && t1 !== 'bye' && t1.id === teamId) || (!!t2 && t2 !== 'bye' && t2.id === teamId);
-}
-
 interface ConnectorProps {
   roundIndex: number;
   matches: InternalMatch[];
