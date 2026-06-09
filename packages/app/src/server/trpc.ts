@@ -1,16 +1,18 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "../lib/prisma";
 
 export type Context = {
   prisma: typeof prisma;
   userId: string | null;
+  userEmail: string | null;
+  userName: string | null;
 };
 
-export const createContext = (userId: string | null): Context => ({
-  prisma,
-  userId,
-});
+export const createContext = (
+  userId: string | null,
+  userEmail: string | null,
+  userName: string | null
+): Context => ({ prisma, userId, userEmail, userName });
 
 const t = initTRPC.context<Context>().create();
 
@@ -22,16 +24,13 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
 
-  const clerk = await clerkClient();
-  const clerkUser = await clerk.users.getUser(ctx.userId);
-
   await ctx.prisma.user.upsert({
     where: { clerkId: ctx.userId },
     update: {},
     create: {
       clerkId: ctx.userId,
-      email: clerkUser.emailAddresses[0]?.emailAddress ?? "",
-      name: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null,
+      email: ctx.userEmail ?? "",
+      name: ctx.userName ?? null,
     },
   });
 

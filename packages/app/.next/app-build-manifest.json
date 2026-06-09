@@ -19,11 +19,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/create/page.js"
-    ],
-    "/api/example-tournament/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/example-tournament/route.js"
     ]
   }
 }

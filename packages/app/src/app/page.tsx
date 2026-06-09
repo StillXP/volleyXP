@@ -1,9 +1,28 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import Link from 'next/link'
-import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs'
 import { Button, Icon } from '@design-system/components'
+import { getSupabaseBrowserClient } from '../lib/supabase/client'
+import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
+
+function useUser() {
+  const [user, setUser] = useState<User | null | undefined>(undefined)
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient()
+    void supabase.auth.getUser().then((result: { data: { user: User | null } }) => {
+      setUser(result.data.user ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        setUser(session?.user ?? null)
+      }
+    )
+    return () => subscription.unsubscribe()
+  }, [])
+  return user
+}
 
 // ── Nav ────────────────────────────────────────────────────────────────────────
 
@@ -260,25 +279,28 @@ const FEATURES = [
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const user = useUser()
   return (
     <>
       <Nav>
         <Logo href="/">Volley</Logo>
         <NavActions>
-          <Show when="signed-in">
-            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-              <Button variant="ghost" size="sm">Dashboard</Button>
-            </Link>
-            <UserButton />
-          </Show>
-          <Show when="signed-out">
-            <SignInButton mode="modal">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-              <Button size="sm">Get Started</Button>
-            </SignUpButton>
-          </Show>
+          {user ? (
+            <>
+              <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+                <Button variant="ghost" size="sm">Dashboard</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/sign-in" style={{ textDecoration: 'none' }}>
+                <Button variant="ghost" size="sm">Sign In</Button>
+              </Link>
+              <Link href="/sign-up" style={{ textDecoration: 'none' }}>
+                <Button size="sm">Get Started</Button>
+              </Link>
+            </>
+          )}
         </NavActions>
       </Nav>
 
@@ -295,20 +317,19 @@ export default function HomePage() {
           Create brackets, track live scores, and manage teams — all in one place.
         </HeroSubtitle>
         <HeroActions>
-          <Show when="signed-out">
-            <SignUpButton mode="modal">
-              <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>
-                Get Started Free
-              </Button>
-            </SignUpButton>
-          </Show>
-          <Show when="signed-in">
+          {user ? (
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
               <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>
                 Go to Dashboard
               </Button>
             </Link>
-          </Show>
+          ) : (
+            <Link href="/sign-up" style={{ textDecoration: 'none' }}>
+              <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>
+                Get Started Free
+              </Button>
+            </Link>
+          )}
           <Link href="/create" style={{ textDecoration: 'none' }}>
             <Button variant="secondary" size="lg">Try a Demo</Button>
           </Link>
@@ -341,20 +362,19 @@ export default function HomePage() {
         <CTASubtitle>
           Get started in minutes. No spreadsheets, no manual seeding.
         </CTASubtitle>
-        <Show when="signed-out">
-          <SignUpButton mode="modal">
-            <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>
-              Create Tournament
-            </Button>
-          </SignUpButton>
-        </Show>
-        <Show when="signed-in">
+        {user ? (
           <Link href="/dashboard" style={{ textDecoration: 'none' }}>
             <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>
               Go to Dashboard
             </Button>
           </Link>
-        </Show>
+        ) : (
+          <Link href="/sign-up" style={{ textDecoration: 'none' }}>
+            <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>
+              Create Tournament
+            </Button>
+          </Link>
+        )}
       </CTASection>
 
       <Footer>

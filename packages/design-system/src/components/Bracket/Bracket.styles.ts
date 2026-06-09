@@ -9,7 +9,6 @@ export const StyledBracket = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  overflow-x: auto;
   padding: ${({ theme }) => theme.spacing[4]};
 `;
 

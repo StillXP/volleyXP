@@ -155,7 +155,7 @@ export const StyledPathCard = styled.div<{ $outcome: PathOutcome }>`
       case 'win':
         return css`
           background-color: ${dark ? theme.color.green[900] : theme.color.green[100]};
-          border-color: ${dark ? theme.color.green[700] : theme.color.green[300]};
+          border-color: ${dark ? theme.color.green[700] : theme.color.green[700]};
         `;
       case 'loss':
         return css`

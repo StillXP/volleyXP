@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from 'styled-components';
 import { MatchCard } from '../MatchCard/MatchCard';
 import type { MatchCardColorScheme, MatchCardStatus } from '../MatchCard/MatchCard';
@@ -63,6 +63,11 @@ function getRoundName(numMatchesInRound: number): string {
   return `Round of ${numMatchesInRound * 2}`;
 }
 
+function getWBRoundDisplayName(roundName: string, roundIndex: number): string {
+  if (roundName.startsWith('Round of')) return `Winners Round ${roundIndex + 1}`;
+  return `Winners ${roundName}`;
+}
+
 function getMatchTitle(roundName: string, shortId: string): string {
   return `${roundName} - ${shortId}`;
 }
@@ -97,10 +102,10 @@ function getMatchTop(matchIndex: number, roundIndex: number, cardHeight: number)
 
 function getLBRoundName(lbRoundIndex: number, totalLBRounds: number): string {
   const num = lbRoundIndex + 1;
-  if (num === totalLBRounds) return 'LB Final';
-  if (num === totalLBRounds - 1) return 'LB Semifinal';
-  if (num === totalLBRounds - 2 && totalLBRounds > 4) return 'LB Quarterfinal';
-  return `LB Round ${num}`;
+  if (num === totalLBRounds) return 'Losers Final';
+  if (num === totalLBRounds - 1) return 'Losers Semifinal';
+  if (num === totalLBRounds - 2 && totalLBRounds > 4) return 'Losers Quarterfinal';
+  return `Losers Round ${num}`;
 }
 
 function getLBMatchTitle(roundName: string, shortId: string): string {
@@ -197,7 +202,7 @@ function isByeMatch(match: InternalMatch): boolean {
 function resolveWinner(
   feedMatch: InternalMatch,
   resultMap: Map<string, BracketMatchData>,
-  allTeams: BracketTeam[]
+  teamById: Map<string, BracketTeam>
 ): InternalSlot {
   if (feedMatch.team1.team === 'bye' && feedMatch.team2.team === 'bye') {
     return { team: 'bye' };
@@ -214,15 +219,15 @@ function resolveWinner(
   }
   const result = resultMap.get(feedMatch.matchId);
   if (result?.winnerId) {
-    const winnerTeam = allTeams.find(t => t.id === result.winnerId) ?? null;
-    return { team: winnerTeam };
+    return { team: teamById.get(result.winnerId) ?? null };
   }
   return { team: null, fromMatchId: feedMatch.matchId };
 }
 
 function generateBracket(
   teams: BracketTeam[],
-  matchData: BracketMatchData[]
+  matchData: BracketMatchData[],
+  isDoubleElim = false
 ): InternalRound[] {
   const sorted = [...teams].sort((a, b) => a.seed - b.seed);
   const bracketSize = nextPowerOf2(sorted.length);
@@ -230,11 +235,13 @@ function generateBracket(
   const seedOrder = getSeedOrder(bracketSize);
   const resultMap = new Map(matchData.map(r => [r.matchId, r]));
   const teamBySeed = new Map(sorted.map(t => [t.seed, t]));
+  const teamById = new Map(sorted.map(t => [t.id, t]));
 
   const rounds: InternalRound[] = [];
   let wbCount = 0;
 
   const r1Name = getRoundName(bracketSize / 2);
+  const r1DisplayName = isDoubleElim ? getWBRoundDisplayName(r1Name, 0) : r1Name;
   const r1Matches: InternalMatch[] = [];
   for (let i = 0; i < bracketSize; i += 2) {
     const mi = i / 2;
@@ -248,7 +255,7 @@ function generateBracket(
       shortId,
       roundIndex: 0,
       matchIndex: mi,
-      title: getMatchTitle(r1Name, shortId),
+      title: getMatchTitle(r1DisplayName, shortId),
       team1,
       team2,
     });
@@ -258,12 +265,13 @@ function generateBracket(
   for (let r = 1; r < numRounds; r++) {
     const prev = rounds[r - 1].matches;
     const roundName = getRoundName(prev.length / 2);
+    const roundDisplayName = isDoubleElim ? getWBRoundDisplayName(roundName, r) : roundName;
     const newMatches: InternalMatch[] = [];
     for (let i = 0; i < prev.length; i += 2) {
       const mi = i / 2;
       const matchId = `r${r + 1}-m${mi + 1}`;
-      const team1 = resolveWinner(prev[i], resultMap, sorted);
-      const team2 = resolveWinner(prev[i + 1], resultMap, sorted);
+      const team1 = resolveWinner(prev[i], resultMap, teamById);
+      const team2 = resolveWinner(prev[i + 1], resultMap, teamById);
       const isBye = team1.team === 'bye' || team2.team === 'bye';
       const shortId = isBye ? '' : `W${++wbCount}`;
       newMatches.push({
@@ -271,7 +279,7 @@ function generateBracket(
         shortId,
         roundIndex: r,
         matchIndex: mi,
-        title: getMatchTitle(roundName, shortId),
+        title: getMatchTitle(roundDisplayName, shortId),
         team1,
         team2,
       });
@@ -289,7 +297,7 @@ function generateBracket(
 function resolveLoser(
   sourceMatch: InternalMatch,
   resultMap: Map<string, BracketMatchData>,
-  allTeams: BracketTeam[]
+  teamById: Map<string, BracketTeam>
 ): InternalSlot {
   const result = resultMap.get(sourceMatch.matchId);
   if (result?.winnerId) {
@@ -297,8 +305,12 @@ function resolveLoser(
     const t2 = sourceMatch.team2.team;
     if (t1 && t1 !== 'bye' && t1.id !== result.winnerId) return { team: t1 };
     if (t2 && t2 !== 'bye' && t2.id !== result.winnerId) return { team: t2 };
-    // winnerId present but doesn't match either resolved team — treat as unresolved
-    const loserTeam = allTeams.find(t => t.id !== result.winnerId && (t.id === (t1 as BracketTeam | null)?.id || t.id === (t2 as BracketTeam | null)?.id)) ?? null;
+    // winnerId present but doesn't match either resolved team — look up by id
+    const t1id = (t1 as BracketTeam | null)?.id;
+    const t2id = (t2 as BracketTeam | null)?.id;
+    const loserTeam = (t1id && t1id !== result.winnerId ? teamById.get(t1id) : undefined)
+      ?? (t2id && t2id !== result.winnerId ? teamById.get(t2id) : undefined)
+      ?? null;
     if (loserTeam) return { team: loserTeam };
   }
   return { team: null, fromMatchId: sourceMatch.matchId, fromMatchIsLoser: true };
@@ -311,6 +323,7 @@ function generateLBRounds(
 ): InternalRound[] {
   const k = wbRounds.length;
   if (k < 2) return [];
+  const teamById = new Map(allTeams.map(t => [t.id, t]));
 
   const totalLBRounds = 2 * (k - 1);
   const lbRounds: InternalRound[] = [];
@@ -329,8 +342,8 @@ function generateLBRounds(
         const mi = i / 2;
         const m1 = wbR1Matches[i];
         const m2 = wbR1Matches[i + 1];
-        const team1: InternalSlot = isByeMatch(m1) ? { team: 'bye' } : resolveLoser(m1, resultMap, allTeams);
-        const team2: InternalSlot = !m2 || isByeMatch(m2) ? { team: 'bye' } : resolveLoser(m2, resultMap, allTeams);
+        const team1: InternalSlot = isByeMatch(m1) ? { team: 'bye' } : resolveLoser(m1, resultMap, teamById);
+        const team2: InternalSlot = !m2 || isByeMatch(m2) ? { team: 'bye' } : resolveLoser(m2, resultMap, teamById);
         const isBye = team1.team === 'bye' || team2.team === 'bye';
         const shortId = isBye ? '' : `L${++lbCount}`;
         matches.push({
@@ -353,8 +366,8 @@ function generateLBRounds(
       for (let i = 0; i < prevLBRound.matches.length; i++) {
         const lbPrev = prevLBRound.matches[i];
         const wbDrop = wbDropMatches[i];
-        const team1 = resolveWinner(lbPrev, resultMap, allTeams);
-        const team2: InternalSlot = !wbDrop || isByeMatch(wbDrop) ? { team: 'bye' } : resolveLoser(wbDrop, resultMap, allTeams);
+        const team1 = resolveWinner(lbPrev, resultMap, teamById);
+        const team2: InternalSlot = !wbDrop || isByeMatch(wbDrop) ? { team: 'bye' } : resolveLoser(wbDrop, resultMap, teamById);
         const isBye = team1.team === 'bye' || team2.team === 'bye';
         const shortId = isBye ? '' : `L${++lbCount}`;
         matches.push({
@@ -375,8 +388,8 @@ function generateLBRounds(
         const mi = i / 2;
         const m1 = prevLBRound.matches[i];
         const m2 = prevLBRound.matches[i + 1];
-        const team1: InternalSlot = !m1 ? { team: 'bye' } : resolveWinner(m1, resultMap, allTeams);
-        const team2: InternalSlot = !m2 ? { team: 'bye' } : resolveWinner(m2, resultMap, allTeams);
+        const team1: InternalSlot = !m1 ? { team: 'bye' } : resolveWinner(m1, resultMap, teamById);
+        const team2: InternalSlot = !m2 ? { team: 'bye' } : resolveWinner(m2, resultMap, teamById);
         const isBye = team1.team === 'bye' || team2.team === 'bye';
         const shortId = isBye ? '' : `L${++lbCount}`;
         matches.push({
@@ -394,6 +407,24 @@ function generateLBRounds(
     lbRounds.push({ roundIndex: lbR, roundName, matches });
   }
 
+  // When WB R1 has byes, the initial LB rounds may be all-bye (no real matches).
+  // Renumber from the first real round so column headers and match titles both start at "LB Round 1".
+  const firstRealIdx = lbRounds.findIndex(r => r.matches.some(m => !isByeMatch(m)));
+  if (firstRealIdx > 0) {
+    const visibleTotal = lbRounds.length - firstRealIdx;
+    for (let i = firstRealIdx; i < lbRounds.length; i++) {
+      const newRoundName = getLBRoundName(i - firstRealIdx, visibleTotal);
+      lbRounds[i] = {
+        ...lbRounds[i],
+        roundName: newRoundName,
+        matches: lbRounds[i].matches.map(m => ({
+          ...m,
+          title: getLBMatchTitle(newRoundName, m.shortId),
+        })),
+      };
+    }
+  }
+
   return lbRounds;
 }
 
@@ -403,6 +434,7 @@ function buildGrandFinalMatch(
   resultMap: Map<string, BracketMatchData>,
   allTeams: BracketTeam[]
 ): InternalMatch {
+  const teamById = new Map(allTeams.map(t => [t.id, t]));
   const wbFinal = wbRounds[wbRounds.length - 1].matches[0];
   const lbFinal = lbRounds.length > 0 ? lbRounds[lbRounds.length - 1].matches[0] : null;
   return {
@@ -411,8 +443,8 @@ function buildGrandFinalMatch(
     roundIndex: 0,
     matchIndex: 0,
     title: 'Grand Final',
-    team1: resolveWinner(wbFinal, resultMap, allTeams),
-    team2: lbFinal ? resolveWinner(lbFinal, resultMap, allTeams) : { team: 'bye' },
+    team1: resolveWinner(wbFinal, resultMap, teamById),
+    team2: lbFinal ? resolveWinner(lbFinal, resultMap, teamById) : { team: 'bye' },
   };
 }
 
@@ -467,6 +499,7 @@ function buildMatchCardProps(
     },
     ...(result?.location !== undefined && { location: result.location }),
     ...(result?.startTime !== undefined && { startTime: result.startTime }),
+    ...(result?.videoUrl  !== undefined && { videoUrl:  result.videoUrl  }),
   };
 }
 
@@ -816,6 +849,7 @@ function DoubleBracketLayout({
 }: DoubleBracketLayoutProps) {
   const theme = useTheme();
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
+  const clearHoveredTeam = useCallback(() => setHoveredTeamId(null), []);
 
   const resultMap = useMemo(
     () => new Map(matchData.map(r => [r.matchId, r])),
@@ -825,7 +859,7 @@ function DoubleBracketLayout({
   const sorted = useMemo(() => [...teams].sort((a, b) => a.seed - b.seed), [teams]);
 
   const wbRounds = useMemo(
-    () => generateBracket(teams, matchData),
+    () => generateBracket(teams, matchData, true),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [teams, matchData]
   );
@@ -851,20 +885,25 @@ function DoubleBracketLayout({
     return map;
   }, [wbRounds, lbRounds, gfMatch]);
 
-  const hoveredTeamMatchIds = useMemo<Set<string>>(() => {
-    if (!hoveredTeamId) return new Set();
-    const set = new Set<string>();
-    const add = (match: InternalMatch) => {
-      if (!isTeamInMatch(match, hoveredTeamId)) return;
-      const result = resultMap.get(match.matchId);
-      if (result?.winnerId === hoveredTeamId) set.add(match.matchId);
+  const winnerMatchIdsByTeam = useMemo<Map<string, Set<string>>>(() => {
+    const map = new Map<string, Set<string>>();
+    const addMatch = (match: InternalMatch) => {
+      const winnerId = resultMap.get(match.matchId)?.winnerId;
+      if (!winnerId) return;
+      if (!map.has(winnerId)) map.set(winnerId, new Set());
+      map.get(winnerId)!.add(match.matchId);
     };
     for (const round of [...wbRounds, ...lbRounds]) {
-      for (const match of round.matches) add(match);
+      for (const match of round.matches) addMatch(match);
     }
-    add(gfMatch);
-    return set;
-  }, [hoveredTeamId, wbRounds, lbRounds, gfMatch, resultMap]);
+    addMatch(gfMatch);
+    return map;
+  }, [wbRounds, lbRounds, gfMatch, resultMap]);
+
+  const hoveredTeamMatchIds = useMemo<Set<string>>(
+    () => hoveredTeamId ? winnerMatchIdsByTeam.get(hoveredTeamId) ?? new Set() : new Set(),
+    [hoveredTeamId, winnerMatchIdsByTeam]
+  );
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const bracketRef = useRef<HTMLDivElement>(null);
@@ -872,6 +911,21 @@ function DoubleBracketLayout({
   const allMatches = useMemo(
     () => [...wbRounds.flatMap(r => r.matches), ...lbRounds.flatMap(r => r.matches), gfMatch],
     [wbRounds, lbRounds, gfMatch]
+  );
+
+  const allMatchesById = useMemo(
+    () => new Map(allMatches.map(m => [m.matchId, m])),
+    [allMatches]
+  );
+
+  const wbVisibleMatches = useMemo(
+    () => wbRounds.map(r => r.matches.filter(m => !isByeMatch(m))),
+    [wbRounds]
+  );
+
+  const lbVisibleMatches = useMemo(
+    () => lbRounds.map(r => r.matches.filter(m => !isByeMatch(m))),
+    [lbRounds]
   );
 
   useEffect(() => {
@@ -882,7 +936,7 @@ function DoubleBracketLayout({
 
   const handleMatchSelect = (matchId: string) => setSelectedMatchId(matchId);
   const handleOverlayClose = () => setSelectedMatchId(null);
-  const selectedMatch = selectedMatchId ? allMatches.find(m => m.matchId === selectedMatchId) ?? null : null;
+  const selectedMatch = selectedMatchId ? allMatchesById.get(selectedMatchId) ?? null : null;
 
   return (
     <>
@@ -894,7 +948,7 @@ function DoubleBracketLayout({
           {wbRounds.map((round, ri) => (
             <Fragment key={ri}>
               <StyledRoundHeader>
-                <StyledRoundHeaderLabel $colorScheme={colorScheme}>{round.roundName}</StyledRoundHeaderLabel>
+                <StyledRoundHeaderLabel $colorScheme={colorScheme}>{getWBRoundDisplayName(round.roundName, ri)}</StyledRoundHeaderLabel>
                 <StyledRoundHeaderDivider $colorScheme={colorScheme} />
               </StyledRoundHeader>
               <StyledRoundHeaderSpacer />
@@ -908,7 +962,7 @@ function DoubleBracketLayout({
         <StyledSectionBody>
           {wbRounds.map((round, ri) => {
             const colHeight = getColumnHeight(round.matches.length, ri);
-            const visibleMatches = round.matches.filter(m => !isByeMatch(m));
+            const visibleMatches = wbVisibleMatches[ri];
             return (
               <StyledRoundGroup key={ri}>
                 <StyledMatchColumn $height={colHeight}>
@@ -920,7 +974,7 @@ function DoubleBracketLayout({
                       onClick={() => handleMatchSelect(match.matchId)}
                       style={{ cursor: 'pointer' }}
                     >
-                      <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={() => setHoveredTeamId(null)} />
+                      <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
                     </StyledMatchSlot>
                   ))}
                 </StyledMatchColumn>
@@ -969,7 +1023,7 @@ function DoubleBracketLayout({
                     onClick={() => handleMatchSelect(gfMatch.matchId)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <MatchCard {...buildMatchCardProps(gfMatch, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={() => setHoveredTeamId(null)} />
+                    <MatchCard {...buildMatchCardProps(gfMatch, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
                   </StyledMatchSlot>
                 </StyledMatchColumn>
               </>
@@ -1001,7 +1055,7 @@ function DoubleBracketLayout({
             {lbRounds.map((round, ri) => {
               const halvingIndex = Math.floor(ri / 2);
               const colHeight = getColumnHeight(round.matches.length, halvingIndex);
-              const visibleMatches = round.matches.filter(m => !isByeMatch(m));
+              const visibleMatches = lbVisibleMatches[ri];
               if (visibleMatches.length === 0) return null;
               return (
                 <StyledRoundGroup key={ri}>
@@ -1014,7 +1068,7 @@ function DoubleBracketLayout({
                         onClick={() => handleMatchSelect(match.matchId)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={() => setHoveredTeamId(null)} />
+                        <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
                       </StyledMatchSlot>
                     ))}
                   </StyledMatchColumn>
@@ -1082,6 +1136,7 @@ export function Bracket({
   // ── Single elimination ──────────────────────────────────────────────────────
 
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
+  const clearHoveredTeam = useCallback(() => setHoveredTeamId(null), []);
 
   const resultMap = useMemo(
     () => new Map(matchData.map(r => [r.matchId, r])),
@@ -1104,23 +1159,38 @@ export function Bracket({
     return map;
   }, [rounds]);
 
-  const hoveredTeamMatchIds = useMemo<Set<string>>(() => {
-    if (!hoveredTeamId) return new Set();
-    const set = new Set<string>();
+  const winnerMatchIdsByTeam = useMemo<Map<string, Set<string>>>(() => {
+    const map = new Map<string, Set<string>>();
     for (const round of rounds) {
       for (const match of round.matches) {
-        if (!isTeamInMatch(match, hoveredTeamId)) continue;
-        const result = resultMap.get(match.matchId);
-        if (result?.winnerId === hoveredTeamId) set.add(match.matchId);
+        const winnerId = resultMap.get(match.matchId)?.winnerId;
+        if (!winnerId) continue;
+        if (!map.has(winnerId)) map.set(winnerId, new Set());
+        map.get(winnerId)!.add(match.matchId);
       }
     }
-    return set;
-  }, [hoveredTeamId, rounds, resultMap]);
+    return map;
+  }, [rounds, resultMap]);
+
+  const hoveredTeamMatchIds = useMemo<Set<string>>(
+    () => hoveredTeamId ? winnerMatchIdsByTeam.get(hoveredTeamId) ?? new Set() : new Set(),
+    [hoveredTeamId, winnerMatchIdsByTeam]
+  );
+
+  const visibleMatchesByRound = useMemo(
+    () => rounds.map(r => r.matches.filter(m => !isByeMatch(m))),
+    [rounds]
+  );
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const bracketRef = useRef<HTMLDivElement>(null);
 
   const allMatches = useMemo(() => rounds.flatMap(r => r.matches), [rounds]);
+
+  const allMatchesById = useMemo(
+    () => new Map(allMatches.map(m => [m.matchId, m])),
+    [allMatches]
+  );
 
   useEffect(() => {
     if (!selectedMatchId || !bracketRef.current) return;
@@ -1130,7 +1200,7 @@ export function Bracket({
 
   const handleMatchSelect = (matchId: string) => setSelectedMatchId(matchId);
   const handleOverlayClose = () => setSelectedMatchId(null);
-  const selectedMatch = selectedMatchId ? allMatches.find(m => m.matchId === selectedMatchId) ?? null : null;
+  const selectedMatch = selectedMatchId ? allMatchesById.get(selectedMatchId) ?? null : null;
 
   return (
     <>
@@ -1149,7 +1219,7 @@ export function Bracket({
       <StyledSectionBody>
         {rounds.map((round, ri) => {
           const colHeight = getColumnHeight(round.matches.length, ri);
-          const visibleMatches = round.matches.filter(m => !isByeMatch(m));
+          const visibleMatches = visibleMatchesByRound[ri];
 
           return (
             <StyledRoundGroup key={ri}>
@@ -1166,7 +1236,7 @@ export function Bracket({
                       {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)}
                       highlightedTeamId={hoveredTeamId ?? undefined}
                       onTeamHover={setHoveredTeamId}
-                      onTeamLeave={() => setHoveredTeamId(null)}
+                      onTeamLeave={clearHoveredTeam}
                     />
                   </StyledMatchSlot>
                 ))}

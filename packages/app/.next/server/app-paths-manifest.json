@@ -1,6 +1,5 @@
 {
-  "/api/example-tournament/route": "app/api/example-tournament/route.js",
-  "/page": "app/page.js",
   "/sign-in/[[...sign-in]]/page": "app/sign-in/[[...sign-in]]/page.js",
-  "/create/page": "app/create/page.js"
+  "/create/page": "app/create/page.js",
+  "/page": "app/page.js"
 }

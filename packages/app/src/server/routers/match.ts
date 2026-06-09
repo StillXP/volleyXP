@@ -2,71 +2,93 @@ import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
 import { MatchStatus } from "../../generated/prisma/client";
 
+const matchInclude = {
+  team1: true,
+  team2: true,
+  winner: true,
+  court: true,
+  games: { orderBy: { gameNumber: "asc" as const } },
+} as const;
+
 export const matchRouter = router({
-  getByTournament: publicProcedure
-    .input(z.object({ tournamentId: z.string() }))
+  getByStage: publicProcedure
+    .input(z.object({ stageId: z.string() }))
     .query(({ ctx, input }) =>
       ctx.prisma.match.findMany({
-        where: { tournamentId: input.tournamentId },
-        include: { participants: { include: { team: true } } },
-        orderBy: [{ round: "asc" }, { createdAt: "asc" }],
+        where: { stageId: input.stageId },
+        include: matchInclude,
+        orderBy: [{ bracketRound: "asc" }, { bracketPosition: "asc" }, { scheduledTime: "asc" }],
+      })
+    ),
+
+  getByEvent: publicProcedure
+    .input(z.object({ eventId: z.string() }))
+    .query(({ ctx, input }) =>
+      ctx.prisma.match.findMany({
+        where: { stage: { eventId: input.eventId } },
+        include: { ...matchInclude, stage: true, pool: true },
+        orderBy: [{ scheduledTime: "asc" }, { createdAt: "asc" }],
       })
     ),
 
   create: protectedProcedure
     .input(
       z.object({
-        tournamentId: z.string(),
-        round: z.number().int().min(1),
-        courtName: z.string().optional(),
-        scheduledAt: z.string().datetime().optional(),
-        teamIds: z.array(z.string()).min(2).max(2),
+        stageId: z.string(),
+        poolId: z.string().optional(),
+        team1Id: z.string().optional(),
+        team2Id: z.string().optional(),
+        courtId: z.string().optional(),
+        scheduledTime: z.string().datetime().optional(),
+        bracketRound: z.string().optional(),
+        bracketPosition: z.number().int().optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      const { teamIds, scheduledAt, ...matchData } = input;
+    .mutation(({ ctx, input }) => {
+      const { scheduledTime, ...rest } = input;
       return ctx.prisma.match.create({
-        data: {
-          ...matchData,
-          scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
-          participants: {
-            create: teamIds.map((teamId) => ({ teamId })),
-          },
-        },
-        include: { participants: { include: { team: true } } },
+        data: { ...rest, scheduledTime: scheduledTime ? new Date(scheduledTime) : undefined },
+        include: matchInclude,
       });
     }),
 
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: z.nativeEnum(MatchStatus) }))
     .mutation(({ ctx, input }) =>
-      ctx.prisma.match.update({
-        where: { id: input.id },
-        data: { status: input.status },
-      })
+      ctx.prisma.match.update({ where: { id: input.id }, data: { status: input.status } })
     ),
 
-  recordScore: protectedProcedure
+  // Record a single game's scores within a match
+  recordGame: protectedProcedure
     .input(
       z.object({
         matchId: z.string(),
-        scores: z.array(z.object({ teamId: z.string(), score: z.number().int().min(0) })),
+        gameNumber: z.number().int().min(1),
+        team1Score: z.number().int().min(0),
+        team2Score: z.number().int().min(0),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const maxScore = Math.max(...input.scores.map((s) => s.score));
-      await Promise.all(
-        input.scores.map((s) =>
-          ctx.prisma.matchParticipant.update({
-            where: { matchId_teamId: { matchId: input.matchId, teamId: s.teamId } },
-            data: { score: s.score, isWinner: s.score === maxScore },
-          })
-        )
-      );
-      return ctx.prisma.match.update({
-        where: { id: input.matchId },
-        data: { status: "COMPLETED" },
-        include: { participants: { include: { team: true } } },
+      const winnerId =
+        input.team1Score > input.team2Score
+          ? (await ctx.prisma.match.findUniqueOrThrow({ where: { id: input.matchId } })).team1Id
+          : (await ctx.prisma.match.findUniqueOrThrow({ where: { id: input.matchId } })).team2Id;
+
+      return ctx.prisma.game.upsert({
+        where: { matchId_gameNumber: { matchId: input.matchId, gameNumber: input.gameNumber } },
+        update: { team1Score: input.team1Score, team2Score: input.team2Score, winnerId },
+        create: { matchId: input.matchId, gameNumber: input.gameNumber, team1Score: input.team1Score, team2Score: input.team2Score, winnerId },
       });
     }),
+
+  // Mark a match complete and set the winner
+  complete: protectedProcedure
+    .input(z.object({ id: z.string(), winnerId: z.string() }))
+    .mutation(({ ctx, input }) =>
+      ctx.prisma.match.update({
+        where: { id: input.id },
+        data: { status: "COMPLETED", winnerId: input.winnerId },
+        include: matchInclude,
+      })
+    ),
 });

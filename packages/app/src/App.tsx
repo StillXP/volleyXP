@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import styled from 'styled-components'
 import { Button, TextField, Dropdown, Bracket } from '@design-system/components'
 import type { BracketTeam, BracketMatchData, DropdownOption } from '@design-system/components'
@@ -242,7 +242,7 @@ function StepMatchFormat({ value, onChange, onBack, onGenerate }: StepMatchForma
 
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 2
-const ZOOM_STEP = 0.1
+const ZOOM_STEP = 0.25
 
 function getDefaultZoom(): number {
   if (typeof window === 'undefined') return 1
@@ -378,22 +378,68 @@ export default function App() {
     })
   }, [])
 
-  const handleZoomIn = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, parseFloat((z + ZOOM_STEP).toFixed(2)))), [])
-  const handleZoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, parseFloat((z - ZOOM_STEP).toFixed(2)))), [])
-  const handleZoomReset = useCallback(() => setZoom(getDefaultZoom()), [])
+  const animZoomRafRef = useRef<number | null>(null)
+
+  const smoothZoomTo = useCallback((targetZoom: number) => {
+    if (animZoomRafRef.current !== null) cancelAnimationFrame(animZoomRafRef.current)
+    const startZoom = zoomRef.current
+    const start = performance.now()
+    const DURATION = 180
+
+    // Anchor zoom to the visible center of the scroll container
+    const el = scrollRef.current
+    const zoomEl = bracketZoomRef.current
+    let contentX = 0, contentY = 0, localCx = 0, localCy = 0, padL = 0, padT = 0
+    if (el) {
+      ;({ padL, padT } = scrollPadRef.current)
+      localCx = el.clientWidth / 2
+      localCy = el.clientHeight / 2
+      contentX = (el.scrollLeft + localCx - padL) / startZoom
+      contentY = (el.scrollTop  + localCy - padT) / startZoom
+    }
+
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / DURATION, 1)
+      const eased = 1 - Math.pow(1 - t, 3) // ease-out cubic
+      const z = startZoom + (targetZoom - startZoom) * eased
+      zoomRef.current = z
+      if (zoomEl) zoomEl.style.zoom = String(z)
+      if (el) {
+        el.scrollLeft = padL + contentX * z - localCx
+        el.scrollTop  = padT + contentY * z - localCy
+      }
+      if (t < 1) {
+        animZoomRafRef.current = requestAnimationFrame(tick)
+      } else {
+        zoomRef.current = targetZoom
+        if (zoomEl) zoomEl.style.zoom = String(targetZoom)
+        setZoom(targetZoom)
+        animZoomRafRef.current = null
+      }
+    }
+    animZoomRafRef.current = requestAnimationFrame(tick)
+  }, [])
+
+  const handleZoomIn = useCallback(() => smoothZoomTo(Math.min(ZOOM_MAX, parseFloat((zoomRef.current + ZOOM_STEP).toFixed(2)))), [smoothZoomTo])
+  const handleZoomOut = useCallback(() => smoothZoomTo(Math.max(ZOOM_MIN, parseFloat((zoomRef.current - ZOOM_STEP).toFixed(2)))), [smoothZoomTo])
+  const handleZoomReset = useCallback(() => smoothZoomTo(getDefaultZoom()), [smoothZoomTo])
 
   const handleGenerateBracket = useCallback(() => {
     setZoom(getDefaultZoom())
     setStep('bracket')
   }, [])
 
-  const bracketTeams: BracketTeam[] = teamNames.map((name, i) => ({
-    id: `team-${i + 1}`,
-    name: name.trim() || `Team${i + 1}`,
-    seed: i + 1,
-  }))
+  const bracketTeams = useMemo<BracketTeam[]>(
+    () => teamNames.map((name, i) => ({
+      id: `team-${i + 1}`,
+      name: name.trim() || `Team${i + 1}`,
+      seed: i + 1,
+    })),
+    [teamNames]
+  )
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollPadRef = useRef<{ padL: number; padT: number }>({ padL: 0, padT: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const isDraggingRef = useRef(false)
   const dragOriginRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null)
@@ -413,9 +459,11 @@ export default function App() {
     const { paddingLeft, paddingTop } = getComputedStyle(el)
     const padL = parseFloat(paddingLeft)
     const padT = parseFloat(paddingTop)
+    scrollPadRef.current = { padL, padT }
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 2) return
+      if (animZoomRafRef.current !== null) { cancelAnimationFrame(animZoomRafRef.current); animZoomRafRef.current = null }
       const dx = e.touches[0].clientX - e.touches[1].clientX
       const dy = e.touches[0].clientY - e.touches[1].clientY
       pinchStartDistRef.current = Math.sqrt(dx * dx + dy * dy)
@@ -467,7 +515,7 @@ export default function App() {
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
-
+      if (animZoomRafRef.current !== null) { cancelAnimationFrame(animZoomRafRef.current); animZoomRafRef.current = null }
       // Normalise deltaY to pixels across deltaMode values
       const delta = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaMode === 2 ? e.deltaY * 300 : e.deltaY
       const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomRef.current * Math.pow(0.999, delta)))
@@ -572,11 +620,11 @@ export default function App() {
           </div>
         </BracketScroll>
         <ZoomControls>
-          <Button variant="secondary" size="sm" onClick={handleZoomOut} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out">
-            <ZoomOutIcon />
-          </Button>
           <Button variant="secondary" size="sm" onClick={handleZoomIn} disabled={zoom >= ZOOM_MAX} aria-label="Zoom in">
             <ZoomInIcon />
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleZoomOut} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out">
+            <ZoomOutIcon />
           </Button>
           <Button variant="secondary" size="sm" onClick={handleZoomReset} disabled={zoom === 1}>
             Reset

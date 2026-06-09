@@ -23,7 +23,18 @@
       "Bash(node -e \"const c = require\\('C:/Users/Andrew/Documents/projects/volley/packages/app/node_modules/@clerk/nextjs'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.match\\(/Button|Signed/i\\)\\)\\)\")",
       "Bash(node -e \"const keys = Object.keys\\(require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\)\\); console.log\\(keys.filter\\(k => k.match\\(/Show|signed|auth/i\\)\\)\\)\")",
       "Bash(node -e \"const Show = require\\('C:/Users/Andrew/Documents/projects/volley/node_modules/@clerk/react'\\).Show; console.log\\(Show.toString\\(\\).substring\\(0, 500\\)\\)\")",
-      "Bash(Select-String \"Bracket.tsx\")"
+      "Bash(Select-String \"Bracket.tsx\")",
+      "Bash(git checkout *)",
+      "Bash(node -e ' *)",
+      "Bash(git show *)",
+      "Read(//tmp/**)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Andrew\\\\Documents\\\\projects\\\\volley\" -Force)",
+      "Bash(Select-Object Name)",
+      "Bash(xargs grep -l \"auth\\\\|Auth\")",
+      "Bash(npm uninstall *)",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__execute_sql",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" npx prisma migrate reset --force)"
     ]
   }
 }

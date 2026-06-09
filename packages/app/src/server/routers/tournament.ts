@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
-import { TournamentFormat, TournamentStatus } from "../../generated/prisma/client";
+import { TournamentStatus } from "../../generated/prisma/client";
 
 export const tournamentRouter = router({
   getAll: publicProcedure.query(({ ctx }) =>
     ctx.prisma.tournament.findMany({
-      include: { owner: true, teams: true },
+      include: { owner: true, location: true, events: true },
       orderBy: { createdAt: "desc" },
     })
   ),
@@ -17,23 +17,24 @@ export const tournamentRouter = router({
         where: { id: input.id },
         include: {
           owner: true,
-          teams: true,
-          matches: { include: { participants: { include: { team: true } } } },
+          location: { include: { courts: true } },
+          events: {
+            include: {
+              teams: true,
+              stages: { orderBy: { order: "asc" } },
+              scheduleItems: { orderBy: { scheduledTime: "asc" } },
+            },
+          },
         },
       })
     ),
 
   create: protectedProcedure
-    .input(
-      z.object({
-        name: z.string().min(1),
-        format: z.nativeEnum(TournamentFormat).default("SINGLE_ELIMINATION"),
-      })
-    )
+    .input(z.object({ name: z.string().min(1), description: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const user = await ctx.prisma.user.findUniqueOrThrow({ where: { clerkId: ctx.userId } });
       return ctx.prisma.tournament.create({
-        data: { name: input.name, format: input.format, ownerId: user.id },
+        data: { name: input.name, description: input.description, ownerId: user.id },
       });
     }),
 

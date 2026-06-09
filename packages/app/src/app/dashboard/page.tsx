@@ -1,17 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { UserButton } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { trpc } from "../../lib/trpc";
+import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { useThemeMode } from "../../lib/ThemeContext";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const { data: tournaments, refetch } = trpc.tournament.getAll.useQuery();
   const createTournament = trpc.tournament.create.useMutation({
     onSuccess: () => { setName(""); refetch(); },
   });
   const { mode, toggle } = useThemeMode();
+
+  const handleSignOut = async () => {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
 
   return (
     <div style={{ maxWidth: 600, margin: "2rem auto", padding: "0 1rem" }}>
@@ -33,7 +42,19 @@ export default function DashboardPage() {
           >
             {mode === "dark" ? "☀️" : "🌙"}
           </button>
-          <UserButton />
+          <button
+            onClick={handleSignOut}
+            style={{
+              background: "none",
+              border: "1px solid currentColor",
+              borderRadius: "6px",
+              padding: "0.25rem 0.6rem",
+              cursor: "pointer",
+              fontSize: "0.875rem",
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </div>
 
@@ -54,11 +75,13 @@ export default function DashboardPage() {
 
       {tournaments?.length === 0 && <p>No tournaments yet.</p>}
       <ul style={{ listStyle: "none", padding: 0 }}>
+        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+        {/* @ts-expect-error TS2589 tRPC+Prisma type depth */}
         {tournaments?.map((t) => (
           <li key={t.id} style={{ padding: "0.75rem 0", borderBottom: "1px solid #eee" }}>
             <strong>{t.name}</strong>
             <span style={{ marginLeft: "0.75rem", color: "#888", fontSize: "0.875rem" }}>
-              {t.format.replace("_", " ")} · {t.status}
+              {t.events.length} event{t.events.length !== 1 ? "s" : ""} · {t.status}
             </span>
           </li>
         ))}
