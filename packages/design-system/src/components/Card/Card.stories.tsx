@@ -21,9 +21,9 @@ const meta: Meta<typeof Card> = {
     tags: { control: 'object', description: 'Tags shown below the description' },
   },
   args: {
-    title: 'Revamping Design Token Workflows at CBS Sports',
+    title: 'Title',
     description:
-      'Developed an automated token system to support expanding coverage of the Playbook Design System',
+      'Description',
     tags: ['Design Tokens', 'Cross-Functional Workflows', 'Automation'],
   },
 };

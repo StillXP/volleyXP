@@ -4,11 +4,10 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import styled from 'styled-components'
 import { Button, TextField, Dropdown, Bracket } from '@design-system/components'
 import type { BracketTeam, BracketMatchData, DropdownOption } from '@design-system/components'
-import { useThemeMode } from './lib/ThemeContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Step = 'team-count' | 'team-names' | 'elim-format' | 'match-format' | 'bracket'
+type Step = 'team-count' | 'elim-format' | 'match-format' | 'bracket'
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
@@ -102,7 +101,7 @@ function StepTeamCount({ value, onChange, onNext }: StepTeamCountProps) {
   return (
     <WizardCard>
       <StepHeader>
-        <StepLabel>Step 1 of 4</StepLabel>
+        <StepLabel>Step 1 of 3</StepLabel>
         <StepTitle>How many teams?</StepTitle>
         <StepSubtitle>Enter a number between 2 and 64.</StepSubtitle>
       </StepHeader>
@@ -122,59 +121,7 @@ function StepTeamCount({ value, onChange, onNext }: StepTeamCountProps) {
   )
 }
 
-// ─── Step 2: Team names ───────────────────────────────────────────────────────
-
-const NamesGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: ${({ theme }) => theme.spacing[3]};
-  max-height: 380px;
-  overflow-y: auto;
-  padding-right: ${({ theme }) => theme.spacing[1]};
-
-  scrollbar-width: thin;
-  scrollbar-color: ${({ theme }) => theme.color.neutral[300]} transparent;
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.color.neutral[300]};
-    border-radius: ${({ theme }) => theme.border.radius.full};
-  }
-`
-
-interface StepTeamNamesProps {
-  names: string[]
-  onChange: (index: number, name: string) => void
-  onBack: () => void
-  onNext: () => void
-}
-
-function StepTeamNames({ names, onChange, onBack, onNext }: StepTeamNamesProps) {
-  return (
-    <WizardCard>
-      <StepHeader>
-        <StepLabel>Step 2 of 4</StepLabel>
-        <StepTitle>Name your teams</StepTitle>
-        <StepSubtitle>Defaults are pre-filled — change any you like or leave them as-is.</StepSubtitle>
-      </StepHeader>
-      <NamesGrid>
-        {names.map((name, i) => (
-          <TextField
-            key={i}
-            label={`Team ${i + 1}`}
-            value={name}
-            onChange={e => onChange(i, e.target.value)}
-          />
-        ))}
-      </NamesGrid>
-      <Actions>
-        <Button variant="secondary" onClick={onBack}>Back</Button>
-        <Button onClick={onNext}>Next</Button>
-      </Actions>
-    </WizardCard>
-  )
-}
-
-// ─── Step 3: Elimination format ───────────────────────────────────────────────
+// ─── Step 2: Elimination format ───────────────────────────────────────────────
 
 interface StepElimFormatProps {
   value: 'single' | 'double'
@@ -187,7 +134,7 @@ function StepElimFormat({ value, onChange, onBack, onNext }: StepElimFormatProps
   return (
     <WizardCard>
       <StepHeader>
-        <StepLabel>Step 3 of 4</StepLabel>
+        <StepLabel>Step 2 of 3</StepLabel>
         <StepTitle>Elimination format</StepTitle>
         <StepSubtitle>
           Single elimination: one loss ends your run. Double elimination: you get a second chance through the losers bracket.
@@ -220,7 +167,7 @@ function StepMatchFormat({ value, onChange, onBack, onGenerate }: StepMatchForma
   return (
     <WizardCard>
       <StepHeader>
-        <StepLabel>Step 4 of 4</StepLabel>
+        <StepLabel>Step 3 of 3</StepLabel>
         <StepTitle>Match format</StepTitle>
         <StepSubtitle>Choose how many sets each match will be played to determine a winner.</StepSubtitle>
       </StepHeader>
@@ -309,19 +256,6 @@ const BracketPageMeta = styled.p`
   margin-top: ${({ theme }) => theme.spacing[1]};
 `
 
-const ThemeToggle = styled.button`
-  background: none;
-  border: 1px solid ${({ theme }) => theme.color.neutral[300]};
-  border-radius: ${({ theme }) => theme.border.radius.md};
-  padding: ${({ theme }) => theme.spacing[1]} ${({ theme }) => theme.spacing[2]};
-  cursor: pointer;
-  font-size: ${({ theme }) => theme.typography.fontSize.base};
-  line-height: 1;
-  color: ${({ theme }) => theme.color.neutral[700]};
-  &:hover {
-    border-color: ${({ theme }) => theme.color.neutral[500]};
-  }
-`
 
 const BracketScroll = styled.div<{ $isDragging: boolean }>`
   flex: 1;
@@ -339,7 +273,6 @@ const BracketScroll = styled.div<{ $isDragging: boolean }>`
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { mode, toggle } = useThemeMode()
   const [step, setStep] = useState<Step>('team-count')
   const [teamCount, setTeamCount] = useState<number>(8)
   const [teamNames, setTeamNames] = useState<string[]>(() =>
@@ -368,14 +301,6 @@ export default function App() {
   const handleTeamCountChange = useCallback((count: number) => {
     setTeamCount(count)
     setTeamNames(Array.from({ length: count }, (_, i) => `Team${i + 1}`))
-  }, [])
-
-  const handleTeamNameChange = useCallback((index: number, name: string) => {
-    setTeamNames(prev => {
-      const next = [...prev]
-      next[index] = name
-      return next
-    })
   }, [])
 
   const animZoomRafRef = useRef<number | null>(null)
@@ -603,9 +528,6 @@ export default function App() {
           <Button variant="secondary" onClick={() => { setStep('team-count'); setMatchData([]); setZoom(getDefaultZoom()) }}>
             Start Over
           </Button>
-          <ThemeToggle onClick={toggle} aria-label="Toggle dark mode">
-            {mode === 'dark' ? '☀️' : '🌙'}
-          </ThemeToggle>
         </BracketPageHeader>
         <BracketScroll
           ref={scrollRef}
@@ -635,26 +557,11 @@ export default function App() {
   }
 
   return (
-    <WizardPage style={{ position: 'relative' }}>
-      <ThemeToggle
-        onClick={toggle}
-        aria-label="Toggle dark mode"
-        style={{ position: 'absolute', top: '1rem', right: '1rem' }}
-      >
-        {mode === 'dark' ? '☀️' : '🌙'}
-      </ThemeToggle>
+    <WizardPage>
       {step === 'team-count' && (
         <StepTeamCount
           value={teamCount}
           onChange={handleTeamCountChange}
-          onNext={() => setStep('team-names')}
-        />
-      )}
-      {step === 'team-names' && (
-        <StepTeamNames
-          names={teamNames}
-          onChange={handleTeamNameChange}
-          onBack={() => setStep('team-count')}
           onNext={() => setStep('elim-format')}
         />
       )}
@@ -662,7 +569,7 @@ export default function App() {
         <StepElimFormat
           value={elimFormat}
           onChange={setElimFormat}
-          onBack={() => setStep('team-names')}
+          onBack={() => setStep('team-count')}
           onNext={() => setStep('match-format')}
         />
       )}
