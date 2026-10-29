@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "../generated/prisma/client";
-import { gameWinner, matchOutcome, targetFor, type Side } from "./matchRules";
+import { gameWinner, matchOutcome, targetFor, type Side } from "../lib/matchRules";
 
 type Tx = Prisma.TransactionClient;
 
