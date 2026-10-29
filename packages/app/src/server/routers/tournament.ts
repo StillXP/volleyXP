@@ -22,20 +22,25 @@ export const tournamentRouter = router({
     })
   ),
 
+  // A narrow select, like event.getById: just what a tournament page shows, with team
+  // counts rather than every team, and only the owner's id and name.
   getById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) =>
       ctx.prisma.tournament.findUniqueOrThrow({
         where: { id: input.id },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          status: true,
+          startDate: true,
+          endDate: true,
           owner: publicOwner,
-          location: { include: { courts: true } },
+          location: { select: { id: true, name: true, address: true } },
           events: {
-            include: {
-              teams: true,
-              stages: { orderBy: { order: "asc" } },
-              scheduleItems: { orderBy: { scheduledTime: "asc" } },
-            },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, teamSize: true, bestOf: true, entryCap: true, status: true, _count: { select: { teams: true } } },
           },
         },
       })
