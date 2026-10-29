@@ -60,6 +60,10 @@ function setup(userId: string | null) {
       update: vi.fn(async () => ({})),
     },
     game: { upsert: vi.fn(async () => ({})) },
+    pool: { count: vi.fn(async () => 1) },
+    // By default every requested team is in the pool.
+    poolTeam: { count: vi.fn(async ({ where }: { where: { teamId: { in: string[] } } }) => where.teamId.in.length) },
+    eventCourt: { count: vi.fn(async () => 1) },
   };
   const caller = createCallerFactory(appRouter)({ prisma, userId } as unknown as Context);
   return { prisma, caller };
@@ -147,6 +151,59 @@ describe("match.create", () => {
     const { caller, prisma } = setup(OWNER);
     prisma.team.count.mockResolvedValue(1);
     await expect(caller.match.create({ stageId: "s1", team1Id: "tm1", team2Id: "tm-elsewhere" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(prisma.match.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("match.create pool and court validation", () => {
+  it("does no pool or court lookups when neither is given", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.match.create({ stageId: "s1", team1Id: "tm1", team2Id: "tm2" });
+    expect(prisma.pool.count).not.toHaveBeenCalled();
+    expect(prisma.eventCourt.count).not.toHaveBeenCalled();
+  });
+
+  it("only accepts a pool from the same pool-play or round-robin stage", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.match.create({ stageId: "s1", poolId: "p1" });
+    expect(prisma.pool.count).toHaveBeenCalledWith({
+      where: { id: "p1", stageId: "s1", stage: { type: { in: ["POOL_PLAY", "ROUND_ROBIN"] } } },
+    });
+  });
+
+  it("rejects a pool that fails that check", async () => {
+    const { caller, prisma } = setup(OWNER);
+    prisma.pool.count.mockResolvedValue(0);
+    await expect(caller.match.create({ stageId: "s1", poolId: "p-elsewhere" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(prisma.match.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects teams that aren't assigned to the pool", async () => {
+    const { caller, prisma } = setup(OWNER);
+    prisma.poolTeam.count.mockResolvedValue(1);
+    await expect(caller.match.create({ stageId: "s1", poolId: "p1", team1Id: "tm1", team2Id: "tm2" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(prisma.match.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a pool match between pool teams", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.match.create({ stageId: "s1", poolId: "p1", team1Id: "tm1", team2Id: "tm2" });
+    expect(prisma.match.create).toHaveBeenCalledOnce();
+  });
+
+  it("only accepts a court allocated to the stage's event", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.match.create({ stageId: "s1", courtId: "c1" });
+    expect(prisma.eventCourt.count).toHaveBeenCalledWith({
+      where: { courtId: "c1", event: { stages: { some: { id: "s1" } } } },
+    });
+    expect(prisma.match.create).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a court that isn't allocated to the event", async () => {
+    const { caller, prisma } = setup(OWNER);
+    prisma.eventCourt.count.mockResolvedValue(0);
+    await expect(caller.match.create({ stageId: "s1", courtId: "c-elsewhere" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(prisma.match.create).not.toHaveBeenCalled();
   });
 });

@@ -60,6 +60,33 @@ export const matchRouter = router({
         }
       }
 
+      // A pool must belong to this stage, which must be one that has pools.
+      if (input.poolId) {
+        const validPool = await ctx.prisma.pool.count({
+          where: { id: input.poolId, stageId: input.stageId, stage: { type: { in: ["POOL_PLAY", "ROUND_ROBIN"] } } },
+        });
+        if (!validPool) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Pool must belong to this pool-play or round-robin stage" });
+        }
+        // Pool matches are only between teams drawn into that pool.
+        if (teamIds.length > 0) {
+          const inPool = await ctx.prisma.poolTeam.count({ where: { poolId: input.poolId, teamId: { in: teamIds } } });
+          if (inPool !== teamIds.length) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Teams must be assigned to this pool" });
+          }
+        }
+      }
+
+      // A court must be one of the courts allocated to this stage's event.
+      if (input.courtId) {
+        const allocated = await ctx.prisma.eventCourt.count({
+          where: { courtId: input.courtId, event: { stages: { some: { id: input.stageId } } } },
+        });
+        if (!allocated) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Court is not allocated to this event" });
+        }
+      }
+
       const { scheduledTime, ...rest } = input;
       return ctx.prisma.match.create({
         data: { ...rest, scheduledTime: scheduledTime ? new Date(scheduledTime) : undefined },

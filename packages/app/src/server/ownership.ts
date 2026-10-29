@@ -48,3 +48,31 @@ export async function assertMatchOwner(db: Db, userId: string, matchId: string) 
   if (!found) throw notFound("Match");
   return found;
 }
+
+export async function assertPoolOwner(db: Db, userId: string, poolId: string) {
+  const found = await db.pool.findFirst({
+    where: { id: poolId, stage: { event: { tournament: { ownerId: userId } } } },
+    select: { id: true },
+  });
+  if (!found) throw notFound("Pool");
+}
+
+export async function assertLocationOwner(db: Db, userId: string, locationId: string) {
+  const found = await db.location.findFirst({
+    where: { id: locationId, ownerId: userId },
+    select: { id: true },
+  });
+  if (!found) throw notFound("Location");
+}
+
+// A fixed court is owned through its location; a temporary one through its event.
+export async function assertCourtOwner(db: Db, userId: string, courtId: string) {
+  const found = await db.court.findFirst({
+    where: {
+      id: courtId,
+      OR: [{ location: { ownerId: userId } }, { event: { tournament: { ownerId: userId } } }],
+    },
+    select: { id: true },
+  });
+  if (!found) throw notFound("Court");
+}
