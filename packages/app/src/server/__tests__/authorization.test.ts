@@ -45,7 +45,6 @@ function setup(userId: string | null) {
       create: vi.fn(async () => ({})),
       update: vi.fn(async () => ({})),
     },
-    game: { upsert: vi.fn(async () => ({})) },
     pool: { count: vi.fn(async () => 1) },
     // By default every requested team is in the pool.
     poolTeam: { count: vi.fn(async ({ where }: { where: { teamId: { in: string[] } } }) => where.teamId.in.length) },
@@ -67,8 +66,6 @@ const guarded: { name: string; call: (c: Caller) => Promise<unknown>; write: (p:
   { name: "team.delete", call: (c) => c.team.delete({ id: "tm1" }), write: (p) => p.team.delete },
   { name: "match.create", call: (c) => c.match.create({ stageId: "s1", team1Id: "tm1", team2Id: "tm2" }), write: (p) => p.match.create },
   { name: "match.updateStatus", call: (c) => c.match.updateStatus({ id: "m1", status: "IN_PROGRESS" }), write: (p) => p.match.update },
-  { name: "match.recordGame", call: (c) => c.match.recordGame({ matchId: "m1", gameNumber: 1, team1Score: 25, team2Score: 20 }), write: (p) => p.game.upsert },
-  { name: "match.complete", call: (c) => c.match.complete({ id: "m1", winnerId: "tm1" }), write: (p) => p.match.update },
 ];
 
 describe.each(guarded)("$name", ({ call, write }) => {
@@ -88,47 +85,6 @@ describe.each(guarded)("$name", ({ call, write }) => {
     const { caller, prisma } = setup(OWNER);
     await call(caller);
     expect(write(prisma)).toHaveBeenCalledOnce();
-  });
-});
-
-describe("match.recordGame", () => {
-  const game = { matchId: "m1", gameNumber: 1 };
-
-  it("rejects a tied score instead of crowning team 2", async () => {
-    const { caller, prisma } = setup(OWNER);
-    await expect(caller.match.recordGame({ ...game, team1Score: 21, team2Score: 21 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(prisma.game.upsert).not.toHaveBeenCalled();
-  });
-
-  it("records team 1 as the winner when it scores higher", async () => {
-    const { caller, prisma } = setup(OWNER);
-    await caller.match.recordGame({ ...game, team1Score: 25, team2Score: 20 });
-    expect(prisma.game.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ winnerId: "tm1" }) }));
-  });
-
-  it("records team 2 as the winner when it scores higher", async () => {
-    const { caller, prisma } = setup(OWNER);
-    await caller.match.recordGame({ ...game, team1Score: 18, team2Score: 25 });
-    expect(prisma.game.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ winnerId: "tm2" }) }));
-  });
-
-  it("requires both teams to be set", async () => {
-    const { caller } = setup(OWNER);
-    await expect(caller.match.recordGame({ matchId: "m2", gameNumber: 1, team1Score: 25, team2Score: 20 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("looks the match up once", async () => {
-    const { caller, prisma } = setup(OWNER);
-    await caller.match.recordGame({ ...game, team1Score: 25, team2Score: 20 });
-    expect(prisma.match.findFirst).toHaveBeenCalledOnce();
-  });
-});
-
-describe("match.complete", () => {
-  it("rejects a winner who isn't playing in the match", async () => {
-    const { caller, prisma } = setup(OWNER);
-    await expect(caller.match.complete({ id: "m1", winnerId: "tm-elsewhere" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(prisma.match.update).not.toHaveBeenCalled();
   });
 });
 

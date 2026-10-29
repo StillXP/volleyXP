@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
 import { assertMatchOwner, assertStageOwner } from "../ownership";
+import { completeByForfeit, recordGameScore, reopenMatch } from "../matchScoring";
 import { MatchStatus } from "../../generated/prisma/client";
 
 const matchInclude = {
@@ -94,14 +95,25 @@ export const matchRouter = router({
       });
     }),
 
+  // Starts or cancels a match, or puts one back to scheduled. A match is completed by
+  // scoring it (recordGame) or by complete; reopen undoes a forfeit.
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: z.nativeEnum(MatchStatus) }))
     .mutation(async ({ ctx, input }) => {
-      await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
-      return ctx.prisma.match.update({ where: { id: input.id }, data: { status: input.status } });
+      const match = await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
+      if (input.status === "COMPLETED") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Score the match, or use complete for a forfeit, to finish it" });
+      }
+      if (match.status === "COMPLETED") {
+        throw new TRPCError({ code: "CONFLICT", message: "This match is completed. Edit its last game or reopen it." });
+      }
+      const data = input.status === "IN_PROGRESS" ? { status: input.status, actualStartTime: new Date() } : { status: input.status };
+      return ctx.prisma.match.update({ where: { id: input.id }, data });
     }),
 
-  // Record a single game's scores within a match
+  // Records a game's score, which may be a game still being played (call it again as
+  // points are scored). Finishing a game that wins the match completes the match and
+  // moves the winner, and in double elimination the loser, into their next matches.
   recordGame: protectedProcedure
     .input(
       z.object({
@@ -112,34 +124,26 @@ export const matchRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const match = await assertMatchOwner(ctx.prisma, ctx.userId, input.matchId);
-      if (!match.team1Id || !match.team2Id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Both teams must be set before recording a game" });
-      }
-      if (input.team1Score === input.team2Score) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "A game cannot end in a tie" });
-      }
-      const winnerId = input.team1Score > input.team2Score ? match.team1Id : match.team2Id;
-
-      return ctx.prisma.game.upsert({
-        where: { matchId_gameNumber: { matchId: input.matchId, gameNumber: input.gameNumber } },
-        update: { team1Score: input.team1Score, team2Score: input.team2Score, winnerId },
-        create: { matchId: input.matchId, gameNumber: input.gameNumber, team1Score: input.team1Score, team2Score: input.team2Score, winnerId },
-      });
+      await assertMatchOwner(ctx.prisma, ctx.userId, input.matchId);
+      await ctx.prisma.$transaction((tx) => recordGameScore(tx, input));
+      return ctx.prisma.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
     }),
 
-  // Mark a match complete and set the winner
+  // Ends a match without playing it out (a forfeit or walkover) and moves the players on.
   complete: protectedProcedure
     .input(z.object({ id: z.string(), winnerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const match = await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
-      if (input.winnerId !== match.team1Id && input.winnerId !== match.team2Id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Winner must be one of the match's teams" });
-      }
-      return ctx.prisma.match.update({
-        where: { id: input.id },
-        data: { status: "COMPLETED", winnerId: input.winnerId },
-        include: matchInclude,
-      });
+      await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
+      await ctx.prisma.$transaction((tx) => completeByForfeit(tx, { matchId: input.id, winnerId: input.winnerId }));
+      return ctx.prisma.match.findUniqueOrThrow({ where: { id: input.id }, include: matchInclude });
+    }),
+
+  // Undoes a forfeit. To change a result decided by games, edit its last game instead.
+  reopen: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
+      await ctx.prisma.$transaction((tx) => reopenMatch(tx, input.id));
+      return ctx.prisma.match.findUniqueOrThrow({ where: { id: input.id }, include: matchInclude });
     }),
 });
