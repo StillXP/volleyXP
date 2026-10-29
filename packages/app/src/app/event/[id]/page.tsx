@@ -10,16 +10,12 @@ import { Bracket } from "@design-system/components";
 import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { toBracketView } from "../../../lib/bracketView";
+import { Page, section, heading, muted, errorText } from "../../../components/PageShell";
 
 const FORMAT_OPTIONS: RadioOption[] = [
   { value: "single", label: "Single Elimination", description: "One loss ends your run." },
   { value: "double", label: "Double Elimination", description: "A second chance through the losers bracket." },
 ];
-
-const section: React.CSSProperties = { display: "flex", flexDirection: "column", gap: cssVars.space.md, marginTop: cssVars.space.xl };
-const heading: React.CSSProperties = { font: cssVars.typography.heading.sm, color: cssVars.color.text.primary };
-const muted: React.CSSProperties = { font: cssVars.typography.body.md, color: cssVars.color.text.secondary };
-const errorText: React.CSSProperties = { font: cssVars.typography.body.sm, color: cssVars.color.text.danger };
 
 export default function EventPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,7 +57,7 @@ export default function EventPage() {
       <p style={{ font: cssVars.typography.body.sm, color: cssVars.color.text.secondary }}>
         {isOwner ? <Link as={NextLink} href="/dashboard">Dashboard</Link> : null}
         {isOwner ? " / " : null}
-        {event.tournament.name}
+        <Link as={NextLink} href={`/tournament/${event.tournament.id}`}>{event.tournament.name}</Link>
       </p>
       <h1 style={{ font: cssVars.typography.heading.lg, color: cssVars.color.text.primary, marginTop: cssVars.space.xs }}>{event.name}</h1>
       <div style={{ display: "flex", gap: cssVars.space.xs, flexWrap: "wrap", marginTop: cssVars.space.sm }}>
@@ -171,13 +167,5 @@ export default function EventPage() {
         </>
       )}
     </Page>
-  );
-}
-
-function Page({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
-  return (
-    <main style={{ maxWidth: wide ? 1400 : 640, margin: `${cssVars.space.xl} auto`, padding: `0 ${cssVars.space.md}` }}>
-      {children}
-    </main>
   );
 }
