@@ -10,10 +10,13 @@ import { Bracket } from "@volley/bracket";
 import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { toBracketView } from "../../../lib/bracketView";
-import { matchPollInterval } from "../../../lib/pollInterval";
+import { matchPollInterval, registrationPollInterval } from "../../../lib/pollInterval";
 import { useDocumentTitle } from "../../../lib/useDocumentTitle";
 import { MatchScorer } from "../../../components/MatchScorer";
 import { Page, section, heading, muted, errorText } from "../../../components/PageShell";
+import { OrganizerRegistrationControls } from "../../../components/registration/OrganizerRegistrationControls";
+import { RegistrationPanel } from "../../../components/registration/RegistrationPanel";
+import { TeamsList } from "../../../components/registration/TeamsList";
 
 const FORMAT_OPTIONS: RadioOption[] = [
   { value: "single", label: "Single Elimination", description: "One loss ends your run." },
@@ -25,13 +28,14 @@ export default function EventPage() {
   const utils = trpc.useUtils();
   const { data: session } = authClient.useSession();
 
-  const eventQuery = trpc.event.getById.useQuery({ id });
+  const eventQuery = trpc.event.getById.useQuery({ id }, { refetchInterval: (query) => registrationPollInterval(query.state.data?.status) });
   const event = eventQuery.data;
   const bracketStage = event?.stages.find((s) => s.type === "SINGLE_ELIM" || s.type === "DOUBLE_ELIM");
   const isOwner = !!session && !!event && session.user.id === event.tournament.ownerId;
   useDocumentTitle(event ? `${event.name} · ${event.tournament.name}` : eventQuery.isLoading ? "Loading event" : "Event not found");
 
-  const teamsQuery = trpc.team.getByEvent.useQuery({ eventId: id });
+  // Teams refresh while registration is open, so the list fills in as teams sign up.
+  const teamsQuery = trpc.team.getByEvent.useQuery({ eventId: id }, { refetchInterval: registrationPollInterval(event?.status) });
   // Scores change while people watch, so the bracket refreshes itself (see matchPollInterval).
   const matchesQuery = trpc.match.getByStage.useQuery(
     { stageId: bracketStage?.id ?? "" },
@@ -45,7 +49,13 @@ export default function EventPage() {
     [matchesQuery.data]
   );
 
-  const refresh = () => Promise.all([utils.event.getById.invalidate({ id }), utils.team.getByEvent.invalidate({ eventId: id }), utils.match.getByStage.invalidate()]);
+  const refresh = () =>
+    Promise.all([
+      utils.event.getById.invalidate({ id }),
+      utils.team.getByEvent.invalidate({ eventId: id }),
+      utils.registration.mine.invalidate({ eventId: id }),
+      utils.match.getByStage.invalidate(),
+    ]);
   const addTeam = trpc.team.create.useMutation({ onSuccess: refresh });
   const removeTeam = trpc.team.delete.useMutation({ onSuccess: refresh });
   const generate = trpc.event.generateBracket.useMutation({ onSuccess: refresh });
@@ -64,6 +74,9 @@ export default function EventPage() {
 
   const teams = teamsQuery.data ?? [];
   const playing = teams.filter((t) => t.status === "REGISTERED" || t.status === "CHECKED_IN");
+  // Teams that signed themselves up but haven't filled their roster yet. Teams added by hand
+  // have no players recorded, so they don't count.
+  const incomplete = playing.filter((t) => t.members.length > 0 && t.members.length < event.teamSize);
   const bracketFormat = bracketStage?.type === "DOUBLE_ELIM" ? "double" : "single";
   const rules = { bestOf: event.bestOf, pointsToWin: event.pointsToWin, pointsToWinLastGame: event.pointsToWinLastGame };
   // Only the organizer gets scoring controls; everyone else sees the read-only match view.
@@ -87,6 +100,8 @@ export default function EventPage() {
         <Tag tone="neutral" size="sm">{event.teamSize} per team</Tag>
         <Tag tone="neutral" size="sm">{playing.length} team{playing.length === 1 ? "" : "s"}</Tag>
         {bracketStage ? <Tag tone="brand" size="sm">{bracketFormat === "double" ? "Double" : "Single"} elimination</Tag> : null}
+        {!bracketStage && event.status === "REGISTRATION" ? <Tag tone="info" size="sm">Registration open</Tag> : null}
+        {!bracketStage && event.status === "SEEDING" ? <Tag tone="neutral" size="sm">Registration closed</Tag> : null}
       </div>
 
       {bracketStage ? (
@@ -128,6 +143,8 @@ export default function EventPage() {
         <>
           <section style={section} aria-labelledby="teams-heading">
             <h2 id="teams-heading" style={heading}>Teams</h2>
+            {isOwner ? <OrganizerRegistrationControls eventId={id} status={event.status} onChanged={refresh} /> : null}
+            <RegistrationPanel eventId={id} event={event} signedIn={!!session} onChanged={refresh} />
             {isOwner ? (
               <form
                 onSubmit={(e) => {
@@ -138,39 +155,13 @@ export default function EventPage() {
                 style={{ display: "flex", alignItems: "flex-end", gap: cssVars.space.xs }}
               >
                 <div style={{ flex: 1 }}>
-                  <InputField label="Team name" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
+                  <InputField label="Add a team by hand" hint="For walk-ups and teams that won't sign up themselves." value={teamName} onChange={(e) => setTeamName(e.target.value)} />
                 </div>
                 <Button type="submit" iconStart="plus" loading={addTeam.isPending} loadingLabel="Adding team">Add team</Button>
               </form>
             ) : null}
             {addTeam.error ? <p role="alert" style={errorText}>{addTeam.error.message}</p> : null}
-            {teams.length === 0 ? (
-              <p style={muted}>{isOwner ? "No teams yet. Add the teams that are playing." : "No teams have been added yet."}</p>
-            ) : (
-              <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {teams.map((t, i) => (
-                  <li
-                    key={t.id}
-                    style={{ display: "flex", alignItems: "center", gap: cssVars.space.sm, padding: `${cssVars.space.xs} 0`, borderBottom: `${cssVars.border.width.thin} solid ${cssVars.color.border.subtle}` }}
-                  >
-                    <span style={{ width: "2ch", font: cssVars.typography.body.sm, color: cssVars.color.text.tertiary }}>{i + 1}</span>
-                    <span style={{ font: cssVars.typography.label.lg, color: cssVars.color.text.primary }}>{t.name}</span>
-                    {t.status === "WITHDRAWN" || t.status === "WAITLISTED" ? <Tag tone="warning" size="sm">{t.status === "WITHDRAWN" ? "Withdrawn" : "Waitlisted"}</Tag> : null}
-                    {isOwner ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        style={{ marginLeft: "auto" }}
-                        aria-label={`Remove ${t.name}`}
-                        onClick={() => removeTeam.mutate({ id: t.id })}
-                      >
-                        Remove
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-            )}
+            <TeamsList teams={teams} teamSize={event.teamSize} isOwner={isOwner} onRemove={(teamId) => removeTeam.mutate({ id: teamId })} />
             {removeTeam.error ? <p role="alert" style={errorText}>{removeTeam.error.message}</p> : null}
           </section>
 
@@ -180,6 +171,11 @@ export default function EventPage() {
               <>
                 <p style={muted}>Teams are seeded in the order listed above. Generate the bracket when everyone is in.</p>
                 <RadioGroup legend="Elimination format" hideLegend options={FORMAT_OPTIONS} value={format} onValueChange={(v) => setFormat(v as "single" | "double")} />
+                {incomplete.length > 0 ? (
+                  <p role="status" style={muted}>
+                    {incomplete.length === 1 ? "1 team doesn't" : `${incomplete.length} teams don't`} have a full roster yet ({incomplete.map((t) => t.name).join(", ")}). You can still generate the bracket.
+                  </p>
+                ) : null}
                 {generate.error ? <p role="alert" style={errorText}>{generate.error.message}</p> : null}
                 <div>
                   <Button

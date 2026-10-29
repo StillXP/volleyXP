@@ -1,16 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import NextLink from "next/link";
 import { Button, InputField, Link } from "@lockin/react";
 import { cssVars } from "@lockin/tokens";
 import { authClient } from "../../../lib/auth-client";
+import { safeNext, withNext } from "../../../lib/safeNext";
 import { useDocumentTitle } from "../../../lib/useDocumentTitle";
 
+// Reading the query string needs a Suspense boundary for a production build.
 export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   useDocumentTitle("Sign in");
   const router = useRouter();
+  // Where to go afterwards: the page that sent the person here, if it is on this site.
+  const requested = useSearchParams().get("next");
+  const next = safeNext(requested);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +38,7 @@ export default function SignInPage() {
     if (error) {
       setError(error.message ?? "Could not sign in");
     } else {
-      router.push("/dashboard");
+      router.push(next);
       router.refresh();
     }
   };
@@ -60,7 +73,7 @@ export default function SignInPage() {
 
         <p style={{ marginTop: cssVars.space.lg, font: cssVars.typography.body.sm, textAlign: "center", color: cssVars.color.text.secondary }}>
           Don&apos;t have an account?{" "}
-          <Link as={NextLink} href="/sign-up">
+          <Link as={NextLink} href={requested ? withNext("/sign-up", next) : "/sign-up"}>
             Sign up
           </Link>
         </p>

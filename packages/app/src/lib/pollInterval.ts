@@ -18,3 +18,20 @@ export function matchPollInterval(matches: { status: string }[] | undefined): nu
   if (matches.every((m) => m.status === "COMPLETED" || m.status === "CANCELLED")) return false;
   return WAITING_POLL_MS;
 }
+
+/** How often to check an event's registration while people sign up. */
+export const REGISTRATION_POLL_MS = 15_000;
+/** How often to check once registration has closed, in case the organizer reopens it. */
+export const CLOSED_POLL_MS = 30_000;
+
+/**
+ * How long to wait before asking again about an event's registration (who has signed up,
+ * whether it is still open), or false to stop. Captains want to see teammates arrive
+ * and visitors want to see registration open, but a draft, or an event whose bracket
+ * exists, has nothing to wait for.
+ */
+export function registrationPollInterval(eventStatus: string | undefined): number | false {
+  if (eventStatus === "REGISTRATION") return REGISTRATION_POLL_MS;
+  if (eventStatus === "SEEDING") return CLOSED_POLL_MS;
+  return false;
+}
