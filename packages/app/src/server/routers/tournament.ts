@@ -32,9 +32,8 @@ export const tournamentRouter = router({
   create: protectedProcedure
     .input(z.object({ name: z.string().min(1), description: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const user = await ctx.prisma.user.findUniqueOrThrow({ where: { clerkId: ctx.userId } });
       return ctx.prisma.tournament.create({
-        data: { name: input.name, description: input.description, ownerId: user.id },
+        data: { name: input.name, description: input.description, ownerId: ctx.userId },
       });
     }),
 

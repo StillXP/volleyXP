@@ -4,6 +4,7 @@ import '@lockin/react/styles.css'
 import './globals.css'
 import StyledComponentsRegistry from '../lib/StyledComponentsRegistry'
 import { TRPCProvider } from '../lib/TRPCProvider'
+import { AccountLink } from '../components/AccountLink'
 
 export const metadata: Metadata = {
   title: 'Volley',
@@ -21,7 +22,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <StyledComponentsRegistry>
-          <TRPCProvider>{children}</TRPCProvider>
+          <TRPCProvider>
+            <AccountLink />
+            {children}
+          </TRPCProvider>
         </StyledComponentsRegistry>
       </body>
     </html>
