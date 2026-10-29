@@ -10,6 +10,7 @@ import { Bracket } from "@design-system/components";
 import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { toBracketView } from "../../../lib/bracketView";
+import { matchPollInterval } from "../../../lib/pollInterval";
 import { MatchScorer } from "../../../components/MatchScorer";
 import { Page, section, heading, muted, errorText } from "../../../components/PageShell";
 
@@ -29,7 +30,12 @@ export default function EventPage() {
   const isOwner = !!session && !!event && session.user.id === event.tournament.ownerId;
 
   const teamsQuery = trpc.team.getByEvent.useQuery({ eventId: id });
-  const matchesQuery = trpc.match.getByStage.useQuery({ stageId: bracketStage?.id ?? "" }, { enabled: !!bracketStage });
+  // Scores change while people watch, so the bracket refreshes itself (see matchPollInterval).
+  const matchesQuery = trpc.match.getByStage.useQuery(
+    { stageId: bracketStage?.id ?? "" },
+    { enabled: !!bracketStage, refetchInterval: (query) => matchPollInterval(query.state.data) }
+  );
+  const anyLive = !!matchesQuery.data?.some((m) => m.status === "IN_PROGRESS");
   const view = useMemo(() => toBracketView(matchesQuery.data ?? []), [matchesQuery.data]);
   // The bracket names matches by key; the scorer needs the stored match behind each one.
   const matchesByKey = useMemo(
@@ -97,6 +103,12 @@ export default function EventPage() {
             </div>
           ) : null}
           {deleteBracket.error ? <p role="alert" style={errorText}>{deleteBracket.error.message}</p> : null}
+          {anyLive ? (
+            <p style={{ ...muted, display: "flex", alignItems: "center", gap: cssVars.space.xs }}>
+              <Tag tone="danger" size="sm">Live</Tag>
+              Scores update automatically.
+            </p>
+          ) : null}
           {matchesQuery.isLoading ? (
             <p style={muted}>Loading bracket…</p>
           ) : (
