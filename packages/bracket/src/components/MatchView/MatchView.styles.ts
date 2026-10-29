@@ -42,6 +42,11 @@ export const StyledMatchView = styled.div`
   display: flex;
   flex-direction: column;
   box-shadow: ${cssVars.shadow.lg};
+
+  /* Focused by code when it opens so assistive tech announces it; nothing to click there. */
+  &:focus {
+    outline: none;
+  }
 `;
 
 // ─── Header ───────────────────────────────────────────────────────────────────

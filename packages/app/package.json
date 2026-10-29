@@ -11,13 +11,13 @@
     "test:run": "vitest run"
   },
   "dependencies": {
-    "@volley/bracket": "*",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "@tanstack/react-query": "^5.99.2",
     "@trpc/client": "^11.16.0",
     "@trpc/react-query": "^11.16.0",
     "@trpc/server": "^11.16.0",
+    "@volley/bracket": "*",
     "better-auth": "^1.7.14",
     "next": "^15.0.0",
     "pg": "^8.20.0",
@@ -36,6 +36,7 @@
     "@types/react-dom": "^18.3.0",
     "jsdom": "^24.0.0",
     "typescript": "^5.4.5",
-    "vitest": "^1.5.0"
+    "vitest": "^1.5.0",
+    "vitest-axe": "^0.1.0"
   }
 }

@@ -185,6 +185,7 @@ export function MatchView({
       className={className}
       role="dialog"
       aria-modal="true"
+      tabIndex={-1}
       aria-label={`${matchName} match details`}
     >
       {/* ─── Header ─── */}
@@ -311,7 +312,20 @@ export interface MatchViewOverlayProps {
   children: React.ReactNode;
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+/** The tab stops inside a container, skipping anything in a collapsed <details>. */
+function tabStops(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => {
+    const details = el.closest('details');
+    return !details || details.open || (el.tagName === 'SUMMARY' && el.parentElement === details);
+  });
+}
+
 export function MatchViewOverlay({ onClose, children }: MatchViewOverlayProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.target === e.currentTarget) onClose();
@@ -327,9 +341,45 @@ export function MatchViewOverlay({ onClose, children }: MatchViewOverlayProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Move focus into the dialog when it opens and hand it back to whatever opened it when
+  // it closes. Focus lands on the dialog itself, not a button: Space activates a button on
+  // key release, so landing on one would press it right after Space opened the dialog.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    overlayRef.current?.querySelector<HTMLElement>('[role="dialog"]')?.focus();
+    return () => {
+      if (opener && opener.isConnected) opener.focus();
+    };
+  }, []);
+
+  // Keep Tab and Shift+Tab inside the dialog, wrapping at either end.
+  const handleTab = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return;
+    const dialog = overlayRef.current?.querySelector<HTMLElement>('[role="dialog"]');
+    if (!dialog) return;
+    const stops = tabStops(dialog);
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (!first || !last) {
+      e.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === dialog)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
   return createPortal(
     <StyledOverlay
+      ref={overlayRef}
       onClick={handleBackdropClick}
+      onKeyDown={handleTab}
       onMouseDown={e => e.stopPropagation()}
       onMouseMove={e => e.stopPropagation()}
       onMouseUp={e => e.stopPropagation()}

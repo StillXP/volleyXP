@@ -46,3 +46,39 @@ describe("tournament.getById", () => {
     expect(args).not.toHaveProperty("include");
   });
 });
+
+describe("tournament.listPublic", () => {
+  const listing = () => {
+    const prisma = { tournament: { findMany: vi.fn(async (_args: unknown) => []) } };
+    const caller = createCallerFactory(appRouter)({ prisma, userId: null } as unknown as Context);
+    return { prisma, caller };
+  };
+  const args = (prisma: ReturnType<typeof listing>["prisma"]) =>
+    prisma.tournament.findMany.mock.calls[0]![0] as { where: unknown; orderBy: unknown; take: number; select: Record<string, unknown> };
+
+  it("is readable without signing in", async () => {
+    const { caller, prisma } = listing();
+    await caller.tournament.listPublic();
+    expect(prisma.tournament.findMany).toHaveBeenCalledOnce();
+  });
+
+  it("leaves out drafts and cancelled tournaments", async () => {
+    const { caller, prisma } = listing();
+    await caller.tournament.listPublic();
+    expect(args(prisma).where).toEqual({ status: { notIn: ["DRAFT", "CANCELLED"] } });
+  });
+
+  it("puts dated tournaments first, newest dates first, and caps the list", async () => {
+    const { caller, prisma } = listing();
+    await caller.tournament.listPublic();
+    expect(args(prisma).orderBy).toEqual([{ startDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]);
+    expect(args(prisma).take).toBe(24);
+  });
+
+  it("selects only the owner's id and name, never an email", async () => {
+    const { caller, prisma } = listing();
+    await caller.tournament.listPublic();
+    expect(args(prisma).select.owner).toEqual({ select: { id: true, name: true } });
+    expect(JSON.stringify(args(prisma).select)).not.toContain("email");
+  });
+});

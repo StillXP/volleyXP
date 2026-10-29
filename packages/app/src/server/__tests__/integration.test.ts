@@ -261,6 +261,27 @@ describe.skipIf(!url)("against a real database", () => {
       await expect(as(otherUserId).event.generateBracket({ eventId: id, format: "single" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
   });
+  describe("tournament.listPublic", () => {
+    it("lists opened-up tournaments, dated ones first, and hides drafts and cancelled ones", async () => {
+      const tag = `public ${run}`;
+      const make = async (name: string, status: "DRAFT" | "REGISTRATION" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED", startDate?: string) =>
+        prisma.tournament.create({ data: { name: `${tag} ${name}`, status, ownerId: userId, ...(startDate && { startDate: new Date(startDate) }) } });
+      await make("draft", "DRAFT", "2030-01-01");
+      await make("cancelled", "CANCELLED", "2030-01-02");
+      await make("undated", "REGISTRATION");
+      await make("early", "COMPLETED", "2029-03-01");
+      await make("late", "IN_PROGRESS", "2029-09-01");
+      const venue = await me.location.create({ name: "Listing Venue" });
+      const withVenue = await make("venue", "REGISTRATION", "2029-06-01");
+      await me.tournament.setLocation({ id: withVenue.id, locationId: venue.id });
+
+      const list = (await as(otherUserId).tournament.listPublic()).filter((t) => t.name.startsWith(tag));
+      expect(list.map((t) => t.name.slice(tag.length + 1))).toEqual(["late", "venue", "early", "undated"]);
+      expect(list.find((t) => t.name.endsWith("venue"))).toMatchObject({ location: { name: "Listing Venue" }, owner: { id: userId, name: "Owner" }, _count: { events: 0 } });
+      expect(JSON.stringify(list)).not.toContain("@test.io");
+    });
+  });
+
   describe("tournament.getById", () => {
     it("returns the tournament page's data: owner without email, venue, events in order with team counts", async () => {
       const venue = await me.location.create({ name: "Page Park", address: "1 Park Rd" });

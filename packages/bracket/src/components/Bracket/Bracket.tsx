@@ -155,6 +155,32 @@ function buildMatchCardProps(
   };
 }
 
+// ─── Keyboard access ──────────────────────────────────────────────────────────
+
+/** What a screen reader says for a match card: its round, the teams, and how it stands. */
+function describeMatch(title: string, card: ReturnType<typeof buildMatchCardProps>): string {
+  const { team1, team2, status } = card;
+  const sets =
+    team1.totalSets !== undefined && team2.totalSets !== undefined
+      ? `, ${team1.totalSets} to ${team2.totalSets} in sets`
+      : '';
+  const won =
+    status === 'completed' && (team1.winner || team2.winner)
+      ? `, won by ${team1.winner ? team1.name : team2.name}`
+      : '';
+  return `${title}: ${team1.name} versus ${team2.name}, ${status}${sets}${won}`;
+}
+
+/** Makes Enter and Space do what a click does, for elements that act as buttons. */
+function activateOnKey(activate: () => void) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); // Space would otherwise scroll the page
+      activate();
+    }
+  };
+}
+
 // ─── MatchView helpers ────────────────────────────────────────────────────────
 
 /**
@@ -607,7 +633,12 @@ function DoubleBracketLayout({
                       key={match.matchId}
                       $top={getMatchTop(match.matchIndex, ri, cardHeight)}
                       data-match-id={match.matchId}
+                      role="button"
+                      tabIndex={0}
+                      aria-haspopup="dialog"
+                      aria-label={describeMatch(match.title, buildMatchCardProps(match, resultMap, titlesByMatchId))}
                       onClick={() => handleMatchSelect(match.matchId)}
+                      onKeyDown={activateOnKey(() => handleMatchSelect(match.matchId))}
                       style={{ cursor: 'pointer' }}
                     >
                       <MatchCard {...buildMatchCardProps(match, resultMap, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
@@ -653,7 +684,12 @@ function DoubleBracketLayout({
                   <StyledMatchSlot
                     $top={gfCardTop}
                     data-match-id={gfMatch.matchId}
+                    role="button"
+                    tabIndex={0}
+                    aria-haspopup="dialog"
+                    aria-label={describeMatch(gfMatch.title, buildMatchCardProps(gfMatch, resultMap, titlesByMatchId))}
                     onClick={() => handleMatchSelect(gfMatch.matchId)}
+                    onKeyDown={activateOnKey(() => handleMatchSelect(gfMatch.matchId))}
                     style={{ cursor: 'pointer' }}
                   >
                     <MatchCard {...buildMatchCardProps(gfMatch, resultMap, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
@@ -698,7 +734,12 @@ function DoubleBracketLayout({
                         key={match.matchId}
                         $top={getMatchTop(match.matchIndex, halvingIndex, cardHeight)}
                         data-match-id={match.matchId}
+                        role="button"
+                        tabIndex={0}
+                        aria-haspopup="dialog"
+                        aria-label={describeMatch(match.title, buildMatchCardProps(match, resultMap, titlesByMatchId))}
                         onClick={() => handleMatchSelect(match.matchId)}
+                        onKeyDown={activateOnKey(() => handleMatchSelect(match.matchId))}
                         style={{ cursor: 'pointer' }}
                       >
                         <MatchCard {...buildMatchCardProps(match, resultMap, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
@@ -862,7 +903,12 @@ export function Bracket({
                     key={match.matchId}
                     $top={getMatchTop(match.matchIndex, ri, cardHeight)}
                     data-match-id={match.matchId}
+                    role="button"
+                    tabIndex={0}
+                    aria-haspopup="dialog"
+                    aria-label={describeMatch(match.title, buildMatchCardProps(match, resultMap, titlesByMatchId))}
                     onClick={() => handleMatchSelect(match.matchId)}
+                    onKeyDown={activateOnKey(() => handleMatchSelect(match.matchId))}
                     style={{ cursor: 'pointer' }}
                   >
                     <MatchCard

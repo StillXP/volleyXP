@@ -11,6 +11,7 @@ import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { toBracketView } from "../../../lib/bracketView";
 import { matchPollInterval } from "../../../lib/pollInterval";
+import { useDocumentTitle } from "../../../lib/useDocumentTitle";
 import { MatchScorer } from "../../../components/MatchScorer";
 import { Page, section, heading, muted, errorText } from "../../../components/PageShell";
 
@@ -28,6 +29,7 @@ export default function EventPage() {
   const event = eventQuery.data;
   const bracketStage = event?.stages.find((s) => s.type === "SINGLE_ELIM" || s.type === "DOUBLE_ELIM");
   const isOwner = !!session && !!event && session.user.id === event.tournament.ownerId;
+  useDocumentTitle(event ? `${event.name} · ${event.tournament.name}` : eventQuery.isLoading ? "Loading event" : "Event not found");
 
   const teamsQuery = trpc.team.getByEvent.useQuery({ eventId: id });
   // Scores change while people watch, so the bracket refreshes itself (see matchPollInterval).

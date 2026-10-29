@@ -9,6 +9,7 @@ import { cssVars } from "@lockin/tokens";
 import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { statusTag } from "../../../lib/tournamentStatus";
+import { useDocumentTitle } from "../../../lib/useDocumentTitle";
 import { Page, section, heading, muted, errorText } from "../../../components/PageShell";
 
 const TEAM_SIZE_OPTIONS: RadioOption[] = [
@@ -29,6 +30,7 @@ export default function TournamentPage() {
   const { data: session } = authClient.useSession();
   const { data: tournament, isLoading } = trpc.tournament.getById.useQuery({ id });
   const isOwner = !!session && !!tournament && session.user.id === tournament.owner.id;
+  useDocumentTitle(tournament?.name ?? (isLoading ? "Loading tournament" : "Tournament not found"));
 
   const [name, setName] = useState("");
   const [teamSize, setTeamSize] = useState("2");

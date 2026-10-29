@@ -20,6 +20,7 @@ vi.mock("../lib/trpc", () => ({
 }));
 
 import { MatchScorer, type ScorerMatchData } from "../components/MatchScorer";
+import { expectAccessible } from "./a11y";
 import type { ScoringRules } from "../lib/matchRules";
 
 const rules: ScoringRules = { bestOf: 3, pointsToWin: 25, pointsToWinLastGame: 15 };
@@ -275,5 +276,36 @@ describe("MatchScorer errors", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     await userEvent.click(point("Team B"));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("MatchScorer accessibility", () => {
+  const states: [string, Partial<ScorerMatchData>][] = [
+    ["a fresh match", {}],
+    ["a game in progress", { status: "IN_PROGRESS", games: [game(1, 12, 10)] }],
+    ["a finished game with the next not started", { status: "IN_PROGRESS", games: [game(1, 25, 20)] }],
+    ["a decided match", { status: "COMPLETED", winnerId: "a", games: [game(1, 25, 20), game(2, 25, 18)] }],
+    ["a forfeit", { status: "COMPLETED", winnerId: "b" }],
+    ["a match waiting for a team", { team2: null, team2Id: null }],
+    ["a cancelled match", { status: "CANCELLED" }],
+  ];
+
+  it.each(states)("has no violations for %s", async (_label, overrides) => {
+    const { container } = renderScorer(overrides);
+    await expectAccessible(container);
+  });
+
+  it("has no violations with the typed-score and forfeit sections open", async () => {
+    const { container } = renderScorer({ status: "IN_PROGRESS", games: [game(1, 12, 10)] });
+    container.querySelectorAll("details").forEach((d) => (d.open = true));
+    await expectAccessible(container);
+  });
+
+  it("has no violations when a score is rejected", async () => {
+    const { container } = renderScorer();
+    container.querySelectorAll("details").forEach((d) => (d.open = true));
+    await userEvent.click(screen.getByRole("button", { name: "Save score" }));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    await expectAccessible(container);
   });
 });

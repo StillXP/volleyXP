@@ -172,3 +172,99 @@ describe('Bracket renderMatchActions', () => {
     expect(within(screen.getByRole('dialog')).getByText('controls')).toBeTruthy();
   });
 });
+
+describe('Bracket keyboard access', () => {
+  const slot = (container: HTMLElement, matchId: string) =>
+    container.querySelector<HTMLElement>(`[data-match-id="${matchId}"]`)!;
+
+  it('makes every match a button in the tab order that opens a dialog', () => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    const slots = container.querySelectorAll('[data-match-id]');
+    expect(slots).toHaveLength(3);
+    slots.forEach(el => {
+      expect(el.getAttribute('role')).toBe('button');
+      expect(el.getAttribute('tabindex')).toBe('0');
+      expect(el.getAttribute('aria-haspopup')).toBe('dialog');
+    });
+  });
+
+  it('names each match by its round, the teams, and how it stands', () => {
+    const matchData: BracketMatchData[] = [
+      { matchId: 'r1-m1', status: 'completed', winnerId: 'team-1', team1Score: { setScores: [25, 25], totalSets: 2 }, team2Score: { setScores: [18, 20], totalSets: 0 } },
+      { matchId: 'r1-m2', status: 'live' },
+    ];
+    render(<Bracket teams={make(4)} matchData={matchData} />);
+    expect(screen.getByRole('button', { name: 'Semifinal - W1: Team 1 versus Team 4, completed, 2 to 0 in sets, won by Team 1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Semifinal - W2: Team 2 versus Team 3, live' })).toBeTruthy();
+    // Matches that depend on earlier results say so rather than reading as blank teams.
+    expect(screen.getByRole('button', { name: /^Final - W3: Team 1 versus Winner of Semifinal - W2, upcoming$/ })).toBeTruthy();
+  });
+
+  it('is reached with Tab, in bracket order', async () => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(slot(container, 'r1-m1'));
+    await userEvent.tab();
+    expect(document.activeElement).toBe(slot(container, 'r1-m2'));
+  });
+
+  it.each([['Enter', '{Enter}'], ['Space', ' ']])('opens the match with %s', async (_name, key) => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    slot(container, 'r1-m2').focus();
+    await userEvent.keyboard(key);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Semifinal - W2')).toBeTruthy();
+  });
+
+  it('moves focus into the dialog when it opens, onto the dialog itself', async () => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    slot(container, 'r1-m1').focus();
+    await userEvent.keyboard('{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
+  });
+
+  it('does not press a button in the dialog when it was opened with Space', async () => {
+    // Space activates a button on key release, so landing focus on one would click it.
+    const onAdd = vi.fn();
+    const { container } = render(
+      <Bracket teams={make(4)} renderMatchActions={() => <button type="button" onClick={onAdd}>+1</button>} />
+    );
+    slot(container, 'r1-m1').focus();
+    await userEvent.keyboard(' ');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('closes with Escape and puts focus back on the match', async () => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    slot(container, 'r1-m2').focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(slot(container, 'r1-m2'));
+  });
+
+  it('puts focus back on the match when closed with the Close button too', async () => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    await userEvent.click(slot(container, 'r1-m1'));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+    expect(document.activeElement).toBe(slot(container, 'r1-m1'));
+  });
+
+  it('keeps Tab and Shift+Tab inside the open dialog', async () => {
+    const { container } = render(
+      <Bracket teams={make(4)} renderMatchActions={() => <button type="button">Scoring control</button>} />
+    );
+    slot(container, 'r1-m1').focus();
+    await userEvent.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog');
+    for (let i = 0; i < 12; i++) {
+      await userEvent.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    for (let i = 0; i < 12; i++) {
+      await userEvent.tab({ shift: true });
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+  });
+});
