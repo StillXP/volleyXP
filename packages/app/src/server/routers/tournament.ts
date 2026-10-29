@@ -14,6 +14,26 @@ export const tournamentRouter = router({
     })
   ),
 
+  // What the public home page lists: tournaments that have been opened up, so not drafts
+  // and not cancelled ones, soonest-dated first. A narrow select, with only the owner's
+  // id and name.
+  listPublic: publicProcedure.query(({ ctx }) =>
+    ctx.prisma.tournament.findMany({
+      where: { status: { notIn: ["DRAFT", "CANCELLED"] } },
+      orderBy: [{ startDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 24,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        startDate: true,
+        owner: publicOwner,
+        location: { select: { name: true } },
+        _count: { select: { events: true } },
+      },
+    })
+  ),
+
   getMine: protectedProcedure.query(({ ctx }) =>
     ctx.prisma.tournament.findMany({
       where: { ownerId: ctx.userId },
