@@ -261,4 +261,31 @@ describe.skipIf(!url)("against a real database", () => {
       await expect(as(otherUserId).event.generateBracket({ eventId: id, format: "single" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
   });
+  describe("tournament.getById", () => {
+    it("returns the tournament page's data: owner without email, venue, events in order with team counts", async () => {
+      const venue = await me.location.create({ name: "Page Park", address: "1 Park Rd" });
+      const tournament = await me.tournament.create({ name: `Page ${run}`, description: "Two days." });
+      await me.tournament.setLocation({ id: tournament.id, locationId: venue.id });
+      const first = await me.event.create({ tournamentId: tournament.id, name: "First", teamSize: 2, bestOf: 3 });
+      const second = await me.event.create({ tournamentId: tournament.id, name: "Second", teamSize: 4, entryCap: 8 });
+      await me.team.create({ eventId: second.id, name: "A" });
+      await me.team.create({ eventId: second.id, name: "B" });
+
+      // Public: read it as a caller who isn't the owner.
+      const page = await as(otherUserId).tournament.getById({ id: tournament.id });
+
+      expect(page).toMatchObject({
+        name: `Page ${run}`,
+        description: "Two days.",
+        status: "DRAFT",
+        owner: { id: userId, name: "Owner" },
+        location: { name: "Page Park", address: "1 Park Rd" },
+      });
+      expect(JSON.stringify(page)).not.toContain("@test.io");
+      expect(page.events.map((e) => [e.id, e.name, e.teamSize, e.bestOf, e.entryCap, e._count.teams])).toEqual([
+        [first.id, "First", 2, 3, null, 0],
+        [second.id, "Second", 4, 1, 8, 2],
+      ]);
+    });
+  });
 });
