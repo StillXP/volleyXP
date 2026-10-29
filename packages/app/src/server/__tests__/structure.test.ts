@@ -14,13 +14,17 @@ const STRANGER = "user-stranger";
 const ownerOf: Record<string, string> = { t1: OWNER, e1: OWNER, s1: OWNER, s2: OWNER, p1: OWNER };
 
 function setup(userId: string | null) {
+  // Interactive transactions get the same fake as their client.
+  const tx: { client: unknown } = { client: null };
   const prisma = {
     tournament: { findFirst: ownedFindFirst(ownerOf) },
     event: {
       findFirst: ownedFindFirst(ownerOf),
       create: vi.fn(async () => ({})),
-      update: vi.fn(async () => ({})),
+      update: vi.fn(async (_args: unknown) => ({ entryCap: null as number | null })),
       delete: vi.fn(async () => ({})),
+      // lockEvent reads the event it locks
+      findUnique: vi.fn(async (_args: unknown) => ({ id: "e1", status: "REGISTRATION", teamSize: 2, entryCap: null as number | null })),
     },
     stage: {
       findFirst: ownedFindFirst(ownerOf, () => ({ type: "POOL_PLAY", eventId: "e1" })),
@@ -42,7 +46,7 @@ function setup(userId: string | null) {
       upsert: vi.fn(async () => ({})),
       deleteMany: vi.fn(async () => ({})),
     },
-    team: { count: vi.fn(async (_args: unknown) => 1) },
+    team: { count: vi.fn(async (_args: unknown) => 1), findMany: vi.fn(async (_args: unknown) => []), updateMany: vi.fn(async (_args: unknown) => ({})) },
     court: { count: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.length) },
     eventCourt: {
       createMany: vi.fn(async () => ({})),
@@ -51,8 +55,12 @@ function setup(userId: string | null) {
     },
     match: { count: vi.fn(async () => 0) },
     game: { count: vi.fn(async () => 0) },
-    $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    $queryRaw: vi.fn(async () => []),
+    $transaction: vi.fn(async (arg: Promise<unknown>[] | ((client: unknown) => Promise<unknown>)) =>
+      typeof arg === "function" ? arg(tx.client) : Promise.all(arg)
+    ),
   };
+  tx.client = prisma;
   const caller = createCallerFactory(appRouter)({ prisma, userId } as unknown as Context);
   return { prisma, caller };
 }

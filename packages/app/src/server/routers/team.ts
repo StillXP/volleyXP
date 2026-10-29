@@ -13,6 +13,8 @@ export const teamRouter = router({
       ctx.prisma.team.findMany({
         where: { eventId: input.eventId },
         include: { members },
+        // The invite code is a secret for the team's own captain (see registration.mine).
+        omit: { inviteCode: true },
         orderBy: [{ seed: "asc" }, { name: "asc" }],
       })
     ),
@@ -27,7 +29,7 @@ export const teamRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertEventOwner(ctx.prisma, ctx.userId, input.eventId);
-      return ctx.prisma.team.create({ data: input, include: { members } });
+      return ctx.prisma.team.create({ data: input, include: { members }, omit: { inviteCode: true } });
     }),
 
   update: protectedProcedure
@@ -42,7 +44,7 @@ export const teamRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       await assertTeamOwner(ctx.prisma, ctx.userId, id);
-      return ctx.prisma.team.update({ where: { id }, data });
+      return ctx.prisma.team.update({ where: { id }, data, omit: { inviteCode: true } });
     }),
 
   delete: protectedProcedure

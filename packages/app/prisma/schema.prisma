@@ -219,6 +219,7 @@ model Event {
   // Temporary courts that exist only for this event
   ownCourts     Court[]
   teams         Team[]
+  teamMembers   TeamMember[]
   stages        Stage[]
   scheduleItems EventScheduleItem[]
 }
@@ -293,9 +294,16 @@ model Team {
   eventId   String
   event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name      String
+  // True while `name` is generated from the members' last names ("Kim/Lopez"), so it
+  // follows membership changes. False once someone types a name, and for teams an
+  // organizer created.
+  usesDefaultName Boolean @default(false)
   // overall event seed; updated after each stage
   seed      Int?
   status    TeamStatus @default(REGISTERED)
+  // The secret in the link a captain shares so teammates can join. Null for teams an
+  // organizer created, and never returned by the public queries.
+  inviteCode String?   @unique
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -311,11 +319,17 @@ model TeamMember {
   id     String         @id @default(cuid())
   teamId String
   team   Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  // The team's event, repeated here so the database itself can insist on one team per
+  // person per event (a unique index can't reach across to Team.eventId). It never
+  // differs from the team's own eventId.
+  eventId String
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
   userId String
   user   User           @relation(fields: [userId], references: [id])
   role   TeamMemberRole @default(PLAYER)
 
   @@unique([teamId, userId])
+  @@unique([eventId, userId])
 }
 
 // ---------------------------------------------------------------------------
