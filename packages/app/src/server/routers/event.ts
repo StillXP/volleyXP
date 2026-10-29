@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
 import { assertEventOwner, assertTournamentOwner } from "../ownership";
 import { writeBracket } from "../bracketWrite";
-import { conflict, lockEvent, promoteWaitlist } from "../registration";
+import { advanceTournament, conflict, lockEvent, promoteWaitlist } from "../registration";
 
 // A best-of series needs an odd number of games so it can't end level.
 const bestOf = z.number().int().min(1).max(7).refine((n) => n % 2 === 1, "bestOf must be odd");
@@ -105,9 +105,14 @@ export const eventRouter = router({
           throw conflict("The bracket has been made, so registration can't change");
         }
         const status = input.open ? "REGISTRATION" : "SEEDING";
-        if (event.status === status) return tx.event.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, status: true } });
         if (!input.open && event.status !== "REGISTRATION") throw conflict("Registration isn't open");
-        return tx.event.update({ where: { id: input.id }, data: { status }, select: { id: true, status: true } });
+        const updated =
+          event.status === status
+            ? { id: event.id, status: event.status }
+            : await tx.event.update({ where: { id: input.id }, data: { status }, select: { id: true, status: true } });
+        // Opening registration is what makes the tournament public.
+        if (input.open) await advanceTournament(tx, event.tournamentId, "REGISTRATION");
+        return updated;
       });
     }),
 
@@ -136,6 +141,7 @@ export const eventRouter = router({
       const tournamentId =
         input.tournamentId ?? (await tx.tournament.create({ data: { name: input.tournamentName!, ownerId: ctx.userId } })).id;
       const event = await tx.event.create({ data: { ...input.event, tournamentId, status: "IN_PROGRESS" } });
+      await advanceTournament(tx, tournamentId, "IN_PROGRESS");
       await tx.team.createMany({ data: teams.map((t) => ({ ...t, eventId: event.id })) });
       const { stageId } = await writeBracket(tx, { eventId: event.id, teams, format: input.format, order: 1 });
       if (input.nets > 0) {
@@ -182,7 +188,8 @@ export const eventRouter = router({
         const last = await tx.stage.aggregate({ where: { eventId: input.eventId }, _max: { order: true } });
         const bracket = await writeBracket(tx, { eventId: input.eventId, teams: seeded, format: input.format, order: (last._max.order ?? 0) + 1 });
         // The bracket closes registration for good.
-        await tx.event.update({ where: { id: input.eventId }, data: { status: "IN_PROGRESS" } });
+        const started = await tx.event.update({ where: { id: input.eventId }, data: { status: "IN_PROGRESS" }, select: { tournamentId: true } });
+        await advanceTournament(tx, started.tournamentId, "IN_PROGRESS");
         return bracket;
       });
     }),

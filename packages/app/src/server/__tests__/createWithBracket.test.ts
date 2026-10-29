@@ -19,6 +19,7 @@ function setup(userId: string | null) {
     tournament: {
       findFirst: ownedFindFirst({ t1: OWNER }),
       create: vi.fn(async (_args: unknown) => ({ id: "new-tournament" })),
+      updateMany: vi.fn(async (_args: unknown) => ({ count: 1 })),
     },
     event: { create: vi.fn(async (_args: unknown) => ({ id: "new-event" })) },
     team: { createMany: vi.fn(async (_args: { data: Row[] }) => ({})) },
@@ -105,6 +106,20 @@ describe("event.createWithBracket validation", () => {
     const { caller, prisma } = setup(OWNER);
     await caller.event.createWithBracket(inNewTournament);
     expect(prisma.event.create).toHaveBeenCalledWith({ data: expect.objectContaining({ status: "IN_PROGRESS" }) });
+  });
+
+  it("starts the tournament with its bracket, a new one or an existing one", async () => {
+    const fresh = setup(OWNER);
+    await fresh.caller.event.createWithBracket(inNewTournament);
+    expect(fresh.prisma.tournament.updateMany).toHaveBeenCalledWith({
+      where: { id: "new-tournament", status: { in: ["DRAFT", "REGISTRATION"] } },
+      data: { status: "IN_PROGRESS" },
+    });
+    const existing = setup(OWNER);
+    await existing.caller.event.createWithBracket({ ...base, tournamentId: "t1" });
+    expect(existing.prisma.tournament.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: "t1" }) })
+    );
   });
 
   it("trims team names", async () => {

@@ -452,4 +452,100 @@ describe.skipIf(!url)("team registration against a real database", () => {
       expect(await teamOf(made.id)).toMatchObject({ name: "Walk-ups", inviteCode: null, usesDefaultName: false });
     });
   });
+  describe("publishing the tournament", () => {
+    // The home page lists tournaments that aren't drafts, and nothing but the event's own
+    // actions changes a tournament's status, so these are what make a tournament public.
+    const tournamentWithEvent = async () => {
+      await ready;
+      const tournament = await organizer.api.tournament.create({ name: `Publishing ${run} ${counter++}` });
+      const event = await organizer.api.event.create({ tournamentId: tournament.id, name: "Doubles", teamSize: 2 });
+      return { tournamentId: tournament.id, eventId: event.id };
+    };
+    const tournamentStatus = async (id: string) => (await prisma.tournament.findUniqueOrThrow({ where: { id } })).status;
+    const isListed = async (id: string) => (await as(null).tournament.listPublic()).some((t) => t.id === id);
+
+    it("keeps a draft tournament off the home page until one of its events opens registration", async () => {
+      const { tournamentId, eventId } = await tournamentWithEvent();
+      expect(await tournamentStatus(tournamentId)).toBe("DRAFT");
+      expect(await isListed(tournamentId)).toBe(false);
+
+      await organizer.api.event.setRegistration({ id: eventId, open: true });
+      expect(await tournamentStatus(tournamentId)).toBe("REGISTRATION");
+      expect(await isListed(tournamentId)).toBe(true);
+    });
+
+    it("stays public when registration closes", async () => {
+      const { tournamentId, eventId } = await tournamentWithEvent();
+      await organizer.api.event.setRegistration({ id: eventId, open: true });
+      await organizer.api.event.setRegistration({ id: eventId, open: false });
+      expect(await tournamentStatus(tournamentId)).toBe("REGISTRATION");
+      expect(await isListed(tournamentId)).toBe(true);
+    });
+
+    it("is published by any one of its events, and an event still in draft does nothing", async () => {
+      const { tournamentId } = await tournamentWithEvent();
+      const second = await organizer.api.event.create({ tournamentId, name: "Open", teamSize: 4 });
+      expect(await tournamentStatus(tournamentId)).toBe("DRAFT");
+      await organizer.api.event.setRegistration({ id: second.id, open: true });
+      expect(await tournamentStatus(tournamentId)).toBe("REGISTRATION");
+    });
+
+    it("heals a tournament whose event was already open, the next time registration is switched on", async () => {
+      const { tournamentId, eventId } = await tournamentWithEvent();
+      await organizer.api.event.setRegistration({ id: eventId, open: true });
+      await prisma.tournament.update({ where: { id: tournamentId }, data: { status: "DRAFT" } }); // as it was before this rule
+      await organizer.api.event.setRegistration({ id: eventId, open: true });
+      expect(await tournamentStatus(tournamentId)).toBe("REGISTRATION");
+    });
+
+    it("is started by a generated bracket, whether or not registration was ever opened", async () => {
+      const opened = await tournamentWithEvent();
+      await organizer.api.event.setRegistration({ id: opened.eventId, open: true });
+      const direct = await tournamentWithEvent();
+      for (const { eventId } of [opened, direct]) {
+        await organizer.api.team.create({ eventId, name: "A" });
+        await organizer.api.team.create({ eventId, name: "B" });
+        await organizer.api.event.generateBracket({ eventId, format: "single" });
+      }
+      for (const { tournamentId } of [opened, direct]) {
+        expect(await tournamentStatus(tournamentId)).toBe("IN_PROGRESS");
+        expect(await isListed(tournamentId)).toBe(true);
+      }
+    });
+
+    it("is started by the quick bracket path, new tournament or existing", async () => {
+      const made = await organizer.api.event.createWithBracket({
+        tournamentName: `Quick ${run} ${counter++}`,
+        event: { name: "Open" },
+        teams: ["A", "B"],
+        format: "single",
+      });
+      expect(await tournamentStatus(made.tournamentId)).toBe("IN_PROGRESS");
+
+      const existing = await organizer.api.tournament.create({ name: `Quick existing ${run} ${counter++}` });
+      await organizer.api.event.createWithBracket({ tournamentId: existing.id, event: { name: "Open" }, teams: ["A", "B"], format: "single" });
+      expect(await tournamentStatus(existing.id)).toBe("IN_PROGRESS");
+    });
+
+    it.each([
+      ["a cancelled tournament", "CANCELLED"],
+      ["a completed tournament", "COMPLETED"],
+      ["a tournament already in progress", "IN_PROGRESS"],
+    ] as const)("never moves %s back, or brings it back", async (_label, status) => {
+      const { tournamentId, eventId } = await tournamentWithEvent();
+      await prisma.tournament.update({ where: { id: tournamentId }, data: { status } });
+      await organizer.api.event.setRegistration({ id: eventId, open: true });
+      expect(await tournamentStatus(tournamentId)).toBe(status);
+      expect(await isListed(tournamentId)).toBe(status !== "CANCELLED");
+    });
+
+    it("never moves a tournament in registration back to draft when a bracket is made", async () => {
+      const { tournamentId, eventId } = await tournamentWithEvent();
+      await organizer.api.event.setRegistration({ id: eventId, open: true });
+      await organizer.api.team.create({ eventId, name: "A" });
+      await organizer.api.team.create({ eventId, name: "B" });
+      await organizer.api.event.generateBracket({ eventId, format: "single" });
+      expect(await tournamentStatus(tournamentId)).toBe("IN_PROGRESS");
+    });
+  });
 });
