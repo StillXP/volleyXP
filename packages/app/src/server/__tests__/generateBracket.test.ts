@@ -19,7 +19,8 @@ function setup(userId: string | null, teams: TeamRow[] = teamsOf(1, 2, 3, 4)) {
   // The transaction callback gets the same fake as its client.
   const tx: { client: unknown } = { client: null };
   const prisma = {
-    event: { findFirst: ownedFindFirst({ e1: OWNER }), update: vi.fn(async (_args: unknown) => ({})) },
+    event: { findFirst: ownedFindFirst({ e1: OWNER }), update: vi.fn(async (_args: unknown) => ({ tournamentId: "t1" })) },
+    tournament: { updateMany: vi.fn(async (_args: unknown) => ({ count: 1 })) },
     stage: {
       findFirst: vi.fn(async (_args: unknown): Promise<Row | null> => null),
       aggregate: vi.fn(async (_args: unknown) => ({ _max: { order: null as number | null } })),
@@ -131,13 +132,23 @@ describe("event.generateBracket writes", () => {
   it("starts the event, which closes registration for good", async () => {
     const { caller, prisma } = setup(OWNER);
     await caller.event.generateBracket(input);
-    expect(prisma.event.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { status: "IN_PROGRESS" } });
+    expect(prisma.event.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { status: "IN_PROGRESS" }, select: { tournamentId: true } });
+  });
+
+  it("starts the tournament too, but only from draft or registration", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.event.generateBracket(input);
+    expect(prisma.tournament.updateMany).toHaveBeenCalledWith({
+      where: { id: "t1", status: { in: ["DRAFT", "REGISTRATION"] } },
+      data: { status: "IN_PROGRESS" },
+    });
   });
 
   it("doesn't touch the event if the bracket can't be made", async () => {
     const { caller, prisma } = setup(OWNER, teamsOf(1));
     await expect(caller.event.generateBracket(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(prisma.event.update).not.toHaveBeenCalled();
+    expect(prisma.tournament.updateMany).not.toHaveBeenCalled();
   });
 
   it("puts the event's own teams into the first-round matches", async () => {

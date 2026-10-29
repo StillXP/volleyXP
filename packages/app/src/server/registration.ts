@@ -23,7 +23,7 @@ export async function lockEvent(tx: Tx, eventId: string) {
   await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
   const event = await tx.event.findUnique({
     where: { id: eventId },
-    select: { id: true, status: true, teamSize: true, entryCap: true },
+    select: { id: true, tournamentId: true, status: true, teamSize: true, entryCap: true },
   });
   if (!event) throw notFound("Event not found");
   return event;
@@ -82,4 +82,16 @@ export async function assertCaptain(tx: Tx, teamId: string, userId: string) {
 export async function assertNotOnATeam(tx: Tx, eventId: string, userId: string) {
   const existing = await tx.teamMember.findUnique({ where: { eventId_userId: { eventId, userId } }, select: { id: true } });
   if (existing) throw conflict("You're already on a team in this event");
+}
+
+/**
+ * Moves a tournament forward as its events do, and never back. The home page lists
+ * tournaments that aren't drafts, so an event opening registration is what publishes
+ * the tournament; a bracket then starts it. The allowed starting statuses are part of
+ * the update, so a tournament that is further along, cancelled or completed is left
+ * alone without needing to be read first.
+ */
+export async function advanceTournament(tx: Tx, tournamentId: string, to: "REGISTRATION" | "IN_PROGRESS") {
+  const from = to === "REGISTRATION" ? (["DRAFT"] as const) : (["DRAFT", "REGISTRATION"] as const);
+  await tx.tournament.updateMany({ where: { id: tournamentId, status: { in: [...from] } }, data: { status: to } });
 }
