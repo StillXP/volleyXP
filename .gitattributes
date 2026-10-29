@@ -1,0 +1,2 @@
+# Vendored tarballs are binary: no line-ending conversion or text diffs.
+vendor/*.tgz -text -diff
