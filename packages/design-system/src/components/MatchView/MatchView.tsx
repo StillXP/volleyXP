@@ -87,6 +87,11 @@ export interface MatchViewProps {
    */
   videoUrl?: string;
   /**
+   * Content shown under the score card, such as scoring controls for an organizer.
+   * Leave it out for a read-only view.
+   */
+  scoring?: React.ReactNode;
+  /**
    * URL to share. Defaults to window.location.href when omitted.
    * On devices with the Web Share API, triggers native sharing.
    * On desktop, copies to clipboard and shows a "Link Copied" tooltip.
@@ -125,6 +130,7 @@ export function MatchView({
   winnerPath,
   loserPath,
   videoUrl,
+  scoring,
   shareUrl,
   onClose,
   className,
@@ -203,6 +209,8 @@ export function MatchView({
           team2={team2}
         />
       </StyledScoreSection>
+
+      {scoring}
 
       {/* ─── Optional metadata ─── */}
       {startTime && (

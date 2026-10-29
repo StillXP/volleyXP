@@ -94,6 +94,11 @@ export interface BracketProps {
   cardHeight?: number;
   /** Single or double elimination. Default: 'single'. */
   eliminationFormat?: 'single' | 'double';
+  /**
+   * Content for the open match's detail view, such as scoring controls. Called with the
+   * match's id (the same ids as `matchData`) and shown under its score card.
+   */
+  renderMatchActions?: (matchId: string) => React.ReactNode;
   className?: string;
 }
 
@@ -468,6 +473,7 @@ interface DoubleBracketLayoutProps {
   teams: BracketTeam[];
   matchData: BracketMatchData[];
   cardHeight: number;
+  renderMatchActions?: (matchId: string) => React.ReactNode;
   className?: string;
 }
 
@@ -475,6 +481,7 @@ function DoubleBracketLayout({
   teams,
   matchData,
   cardHeight,
+  renderMatchActions,
   className,
 }: DoubleBracketLayoutProps) {
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
@@ -729,6 +736,7 @@ function DoubleBracketLayout({
             handleMatchSelect,
             handleOverlayClose
           )}
+          {...(renderMatchActions && { scoring: renderMatchActions(selectedMatch.matchId) })}
         />
       </MatchViewOverlay>
     )}
@@ -743,6 +751,7 @@ export function Bracket({
   matchData = [],
   cardHeight = CARD_HEIGHT,
   eliminationFormat = 'single',
+  renderMatchActions,
   className,
 }: BracketProps) {
   if (eliminationFormat === 'double') {
@@ -751,6 +760,7 @@ export function Bracket({
         teams={teams}
         matchData={matchData}
         cardHeight={cardHeight}
+        {...(renderMatchActions !== undefined && { renderMatchActions })}
         {...(className !== undefined && { className })}
       />
     );
@@ -892,6 +902,7 @@ export function Bracket({
             handleMatchSelect,
             handleOverlayClose
           )}
+          {...(renderMatchActions && { scoring: renderMatchActions(selectedMatch.matchId) })}
         />
       </MatchViewOverlay>
     )}

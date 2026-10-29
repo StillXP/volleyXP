@@ -9,17 +9,25 @@ const Z_TOOLTIP = 300;
 
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
+// The overlay scrolls when its content is taller than the screen (a phone showing the
+// scoring controls). Auto margins on the dialog keep it centered when it does fit,
+// which align-items/justify-content can't do without clipping the top when it overflows.
 export const StyledOverlay = styled.div`
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow-y: auto;
   background-color: ${cssVars.color.background.overlay};
   z-index: ${Z_MODAL};
   padding: ${cssVars.space.md};
   cursor: default;
   user-select: none;
+
+  /* Safari makes inputs inside a user-select: none ancestor impossible to type in. */
+  & input,
+  & textarea {
+    user-select: text;
+  }
 `;
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -30,6 +38,7 @@ export const StyledMatchView = styled.div`
   border-radius: ${cssVars.radius.xl};
   width: 452px;
   max-width: 100%;
+  margin: auto;
   display: flex;
   flex-direction: column;
   box-shadow: ${cssVars.shadow.lg};
