@@ -20,8 +20,7 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@design-system/components": ["../design-system/src/index.ts"],
-      "@design-system/bracket-model": ["../design-system/src/bracket-model/index.ts"],
-      "@/*": ["../design-system/src/*"]
+      "@design-system/bracket-model": ["../design-system/src/bracket-model/index.ts"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
