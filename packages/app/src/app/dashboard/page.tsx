@@ -6,7 +6,7 @@ import { Button, InputField, Tag, Toggle, getResolvedColorMode, setColorMode } f
 import type { TagTone } from "@lockin/react";
 import { cssVars } from "@lockin/tokens";
 import { trpc } from "../../lib/trpc";
-import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { authClient } from "../../lib/auth-client";
 
 const STATUS_TAG: Record<string, { label: string; tone: TagTone }> = {
   DRAFT: { label: "Draft", tone: "neutral" },
@@ -32,8 +32,7 @@ export default function DashboardPage() {
   };
 
   const handleSignOut = async () => {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    await authClient.signOut();
     router.push("/");
     router.refresh();
   };

@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: volley
+      POSTGRES_PASSWORD: volley
+      POSTGRES_DB: volley
+    ports:
+      - "5432:5432"
+    volumes:
+      - volley-db:/var/lib/postgresql/data
+
+volumes:
+  volley-db:
