@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   deleteStage: vi.fn(),
   addTeam: vi.fn(),
   removeTeam: vi.fn(),
+  recordGame: vi.fn(),
 }));
 
 const query = (data: unknown) => ({ data, isLoading: false, error: null });
@@ -39,7 +40,12 @@ vi.mock("../lib/trpc", () => {
         create: { useMutation: () => mutation(h.addTeam) },
         delete: { useMutation: () => mutation(h.removeTeam) },
       },
-      match: { getByStage: { useQuery: () => query(h.state.matches) } },
+      match: {
+        getByStage: { useQuery: () => query(h.state.matches) },
+        recordGame: { useMutation: () => ({ mutateAsync: h.recordGame, isPending: false }) },
+        complete: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+        reopen: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      },
       stage: { delete: { useMutation: () => mutation(h.deleteStage) } },
     },
   };
@@ -54,6 +60,8 @@ const event = (stages: unknown[] = []) => ({
   id: "e1",
   name: "Mixed Doubles",
   bestOf: 3,
+  pointsToWin: 25,
+  pointsToWinLastGame: 15,
   teamSize: 2,
   tournament: { id: "t", name: "Summer Open", ownerId: OWNER },
   stages,
@@ -65,10 +73,13 @@ const stored = (n: number, format: "single" | "double", overrides: Record<string
   const teams = Array.from({ length: n }, (_, i) => team(i + 1));
   const side = (s: { kind: string; teamId?: string }) => (s.kind === "team" ? teams.find((t) => t.id === s.teamId)! : null);
   return planBracket(teams, format).map((p) => ({
+    id: `stored-${p.key}`,
     bracketKey: p.key,
     status: "SCHEDULED",
     team1: side(p.team1),
     team2: side(p.team2),
+    team1Id: side(p.team1)?.id ?? null,
+    team2Id: side(p.team2)?.id ?? null,
     winnerId: null,
     scheduledTime: null,
     court: null,
@@ -210,6 +221,62 @@ describe("event page with a bracket", () => {
     h.state.userId = OWNER;
     render(<EventPage />);
     expect(screen.getByRole("button", { name: "Generate bracket" })).toBeTruthy();
+  });
+});
+
+describe("event page scoring", () => {
+  const openMatch = async (container: HTMLElement, key: string) =>
+    userEvent.click(container.querySelector(`[data-match-id="${key}"]`)!);
+
+  beforeEach(() => {
+    h.state.event = event([{ id: "s1", type: "SINGLE_ELIM" }]);
+    h.state.matches = stored(4, "single");
+    h.recordGame.mockResolvedValue({});
+  });
+
+  it("gives the owner scoring controls in the match view", async () => {
+    h.state.userId = OWNER;
+    const { container } = render(<EventPage />);
+    await openMatch(container, "r1-m1");
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Score this match" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Point for Team 1" })).toBeTruthy();
+  });
+
+  it("saves a point against the stored match that was opened", async () => {
+    h.state.userId = OWNER;
+    const { container } = render(<EventPage />);
+    await openMatch(container, "r1-m2");
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Point for Team 2" }));
+    // r1-m2 is seed 2 against seed 3.
+    expect(h.recordGame).toHaveBeenCalledWith({ matchId: "stored-r1-m2", gameNumber: 1, team1Score: 1, team2Score: 0 });
+  });
+
+  it("uses the event's own scoring rules", async () => {
+    h.state.userId = OWNER;
+    h.state.event = { ...event([{ id: "s1", type: "SINGLE_ELIM" }]), pointsToWin: 21 };
+    const { container } = render(<EventPage />);
+    await openMatch(container, "r1-m1");
+    expect(within(screen.getByRole("dialog")).getByText(/first to 21, win by 2/)).toBeTruthy();
+  });
+
+  it("waits for both teams in a match that isn't set yet", async () => {
+    h.state.userId = OWNER;
+    const { container } = render(<EventPage />);
+    await openMatch(container, "r2-m1"); // the final, still waiting on the semifinals
+    expect(within(screen.getByRole("dialog")).getByText("Scoring opens once both teams are known.")).toBeTruthy();
+  });
+
+  it.each([
+    ["a visitor", "someone-else"],
+    ["a signed-out visitor", null],
+  ])("shows %s the match without scoring controls", async (_label, userId) => {
+    h.state.userId = userId;
+    const { container } = render(<EventPage />);
+    await openMatch(container, "r1-m1");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Score this match" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Point for/ })).toBeNull();
   });
 });
 

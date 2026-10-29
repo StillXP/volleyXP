@@ -10,6 +10,7 @@ import { Bracket } from "@design-system/components";
 import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { toBracketView } from "../../../lib/bracketView";
+import { MatchScorer } from "../../../components/MatchScorer";
 import { Page, section, heading, muted, errorText } from "../../../components/PageShell";
 
 const FORMAT_OPTIONS: RadioOption[] = [
@@ -30,6 +31,11 @@ export default function EventPage() {
   const teamsQuery = trpc.team.getByEvent.useQuery({ eventId: id });
   const matchesQuery = trpc.match.getByStage.useQuery({ stageId: bracketStage?.id ?? "" }, { enabled: !!bracketStage });
   const view = useMemo(() => toBracketView(matchesQuery.data ?? []), [matchesQuery.data]);
+  // The bracket names matches by key; the scorer needs the stored match behind each one.
+  const matchesByKey = useMemo(
+    () => new Map((matchesQuery.data ?? []).flatMap((m) => (m.bracketKey ? [[m.bracketKey, m] as const] : []))),
+    [matchesQuery.data]
+  );
 
   const refresh = () => Promise.all([utils.event.getById.invalidate({ id }), utils.team.getByEvent.invalidate({ eventId: id }), utils.match.getByStage.invalidate()]);
   const addTeam = trpc.team.create.useMutation({ onSuccess: refresh });
@@ -51,6 +57,14 @@ export default function EventPage() {
   const teams = teamsQuery.data ?? [];
   const playing = teams.filter((t) => t.status === "REGISTERED" || t.status === "CHECKED_IN");
   const bracketFormat = bracketStage?.type === "DOUBLE_ELIM" ? "double" : "single";
+  const rules = { bestOf: event.bestOf, pointsToWin: event.pointsToWin, pointsToWinLastGame: event.pointsToWinLastGame };
+  // Only the organizer gets scoring controls; everyone else sees the read-only match view.
+  const renderMatchActions = isOwner
+    ? (key: string) => {
+        const match = matchesByKey.get(key);
+        return match ? <MatchScorer match={match} rules={rules} onChanged={refresh} /> : null;
+      }
+    : undefined;
 
   return (
     <Page wide={!!bracketStage}>
@@ -87,7 +101,12 @@ export default function EventPage() {
             <p style={muted}>Loading bracket…</p>
           ) : (
             <div style={{ overflow: "auto", padding: cssVars.space.md, background: cssVars.color.background.subtle, borderRadius: cssVars.radius.lg }}>
-              <Bracket teams={view.teams} eliminationFormat={bracketFormat} matchData={view.matchData} />
+              <Bracket
+                teams={view.teams}
+                eliminationFormat={bracketFormat}
+                matchData={view.matchData}
+                {...(renderMatchActions && { renderMatchActions })}
+              />
             </div>
           )}
         </section>

@@ -18,6 +18,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     // Lock In ships bundler-style ESM (extensionless imports); let Vite transform it.
     server: { deps: { inline: [/@lockin\//] } },
