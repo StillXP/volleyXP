@@ -348,14 +348,23 @@ model Match {
   winnerId String?
   winner   Team?  @relation("MatchWinner", fields: [winnerId], references: [id])
 
-  // Double-elim bracket progression: where winner and loser go next
+  // The id the Bracket component uses for this match ("r1-m1", "lb-r2-m1", "gf-m1").
+  // Null for pool play.
+  bracketKey String?
+
+  // Bracket progression: where winner and loser go next, and which side of that
+  // match they fill (1 = team1, 2 = team2). The slot is set whenever the match is.
   nextWinnerMatchId String?
+  nextWinnerSlot    Int?
   nextLoserMatchId  String?
+  nextLoserSlot     Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   games Game[]
+
+  @@unique([stageId, bracketKey])
 }
 
 // Individual games within a match (for best-of-3/5 formats)

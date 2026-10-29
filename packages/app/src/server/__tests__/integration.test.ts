@@ -131,4 +131,68 @@ describe.skipIf(!url)("against a real database", () => {
     await me.tournament.setLocation({ id: tournament.id, locationId: null });
     await me.location.delete({ id: venue.id });
   });
+  describe("event.createWithBracket", () => {
+    const stored = (stageId: string) => prisma.match.findMany({ where: { stageId } });
+
+    it.each([
+      ["single", 8, 7],
+      ["single", 7, 6],
+      ["double", 8, 14],
+      ["double", 5, 8],
+    ] as const)("saves a connected %s bracket for %i teams (%i matches)", async (format, count, matches) => {
+      const result = await me.event.createWithBracket({
+        tournamentName: `Bracket ${format} ${count}`,
+        event: { name: "Open" },
+        teams: Array.from({ length: count }, (_, i) => `Team ${i + 1}`),
+        format,
+        nets: 2,
+      });
+      const rows = await stored(result.stageId);
+      expect(rows).toHaveLength(matches);
+
+      // Every link lands on a match in the same stage, on a side that was left empty.
+      const byId = new Map(rows.map((m) => [m.id, m]));
+      for (const m of rows) {
+        for (const [next, slot] of [[m.nextWinnerMatchId, m.nextWinnerSlot], [m.nextLoserMatchId, m.nextLoserSlot]] as const) {
+          if (!next) continue;
+          const target = byId.get(next)!;
+          expect(target).toBeDefined();
+          expect(slot === 1 ? target.team1Id : target.team2Id).toBeNull();
+        }
+      }
+      // Seed 1 plays in the bracket, and the nets exist and are allocated to the event.
+      const seeded = await prisma.team.findMany({ where: { eventId: result.eventId }, orderBy: { seed: "asc" } });
+      expect(seeded.map((t) => t.name)[0]).toBe("Team 1");
+      expect(await prisma.eventCourt.count({ where: { eventId: result.eventId } })).toBe(2);
+    });
+
+    it("adds to an existing tournament", async () => {
+      const tournament = await me.tournament.create({ name: "Existing" });
+      const result = await me.event.createWithBracket({
+        tournamentId: tournament.id,
+        event: { name: "Second Event", bestOf: 5 },
+        teams: ["A", "B", "C", "D"],
+        format: "single",
+      });
+      expect(result.tournamentId).toBe(tournament.id);
+      expect((await prisma.event.findUniqueOrThrow({ where: { id: result.eventId } })).bestOf).toBe(5);
+    });
+
+    it("saves nothing if a write fails partway through", async () => {
+      const name = `Rolled back ${run}`;
+      // Postgres rejects NUL in text, after the tournament and event rows have been written.
+      await expect(
+        me.event.createWithBracket({ tournamentName: name, event: { name: "Open" }, teams: ["A", "B "], format: "single" })
+      ).rejects.toThrow();
+      expect(await prisma.tournament.count({ where: { name } })).toBe(0);
+      expect(await prisma.event.count({ where: { name: "Open", tournament: { name } } })).toBe(0);
+    });
+
+    it("rejects a bracket key reused within a stage, and a link without its slot", async () => {
+      const result = await me.event.createWithBracket({ tournamentName: `Constraints ${run}`, event: { name: "Open" }, teams: ["A", "B", "C", "D"], format: "single" });
+      await expect(prisma.match.create({ data: { stageId: result.stageId, bracketKey: "r1-m1" } })).rejects.toThrow();
+      await expect(prisma.match.create({ data: { stageId: result.stageId, nextWinnerMatchId: "x" } })).rejects.toThrow();
+      await expect(prisma.match.create({ data: { stageId: result.stageId, nextWinnerMatchId: "x", nextWinnerSlot: 3 } })).rejects.toThrow();
+    });
+  });
 });
