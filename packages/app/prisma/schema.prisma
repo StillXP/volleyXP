@@ -72,6 +72,7 @@ model User {
   accounts Account[]
 
   ownedTournaments Tournament[]
+  ownedLocations   Location[]
   teamMemberships  TeamMember[]
 }
 
@@ -147,8 +148,12 @@ model Tournament {
   events Event[]
 }
 
+// A reusable venue. It may have no fixed courts (a park or beach where the
+// organizer brings their own nets); those are created per event on Court.eventId.
 model Location {
   id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
   name      String
   address   String?
   notes     String?
@@ -157,20 +162,30 @@ model Location {
 
   courts      Court[]
   tournaments Tournament[]
+
+  @@index([ownerId])
 }
 
+// Belongs to exactly one of: a Location (fixed court, reusable across events) or
+// an Event (temporary net set up for that event only). The "exactly one" rule is
+// a CHECK constraint in the migration because Prisma can't express it.
 model Court {
-  id         String   @id @default(cuid())
-  locationId String
-  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  id         String    @id @default(cuid())
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  eventId    String?
+  event      Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   // "Court 1", "Court A", "Sand Court 3"
   name       String
   // "hardwood", "sand", "grass" — extensible for future sports
   surface    String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   eventCourts EventCourt[]
   matches     Match[]
+
+  @@index([locationId])
+  @@index([eventId])
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +210,10 @@ model Event {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  // Courts in use at this event (fixed or temporary)
   courts        EventCourt[]
+  // Temporary courts that exist only for this event
+  ownCourts     Court[]
   teams         Team[]
   stages        Stage[]
   scheduleItems EventScheduleItem[]
