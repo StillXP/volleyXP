@@ -23,8 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <StyledComponentsRegistry>
           <TRPCProvider>
+            <a className="skip-link" href="#main-content">Skip to main content</a>
             <AccountLink />
-            {children}
+            {/* The one main landmark for every page; the skip link jumps here. */}
+            <main id="main-content" tabIndex={-1}>{children}</main>
           </TRPCProvider>
         </StyledComponentsRegistry>
       </body>

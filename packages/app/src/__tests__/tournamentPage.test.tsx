@@ -36,6 +36,7 @@ vi.mock("../lib/trpc", () => ({
 }));
 
 import TournamentPage from "../app/tournament/[id]/page";
+import { expectAccessible } from "./a11y";
 
 const OWNER = "owner";
 const event = (n: number, overrides: Record<string, unknown> = {}) => ({
@@ -181,5 +182,58 @@ describe("tournament page when it can't be loaded", () => {
     h.state.tournament = undefined;
     render(<TournamentPage />);
     expect(screen.getByRole("heading", { name: "Tournament not found" })).toBeTruthy();
+  });
+});
+
+describe("tournament page accessibility", () => {
+  it("has no violations for a visitor", async () => {
+    const { container } = render(<TournamentPage />);
+    expect(screen.queryAllByRole("main")).toHaveLength(0); // the root layout owns the landmark
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    await expectAccessible(container);
+  });
+
+  it("has no violations for the owner, with the add-event form", async () => {
+    h.state.userId = OWNER;
+    const { container } = render(<TournamentPage />);
+    await expectAccessible(container);
+  });
+
+  it("has no violations with validation errors showing", async () => {
+    h.state.userId = OWNER;
+    const { container } = render(<TournamentPage />);
+    await userEvent.type(screen.getByLabelText(/Team limit/), "0");
+    await userEvent.click(screen.getByRole("button", { name: "Create event" }));
+    expect(screen.getByText("Enter a name for the event")).toBeTruthy();
+    expect(screen.getByText("Enter a whole number, 1 or more")).toBeTruthy();
+    await expectAccessible(container);
+  });
+
+  it("has no violations with a server error showing", async () => {
+    h.state.userId = OWNER;
+    h.state.createError = { message: "Tournament not found" };
+    const { container } = render(<TournamentPage />);
+    await expectAccessible(container);
+  });
+
+  it("has no violations with no events, or when it can't be found", async () => {
+    h.state.tournament = tournament({ events: [] });
+    const first = render(<TournamentPage />);
+    await expectAccessible(first.container);
+    first.unmount();
+    h.state.tournament = undefined;
+    const second = render(<TournamentPage />);
+    await expectAccessible(second.container);
+  });
+});
+
+describe("tournament page title", () => {
+  it("is named after the tournament, and says when it can't be found", () => {
+    const first = render(<TournamentPage />);
+    expect(document.title).toBe("Summer Open · Volley");
+    first.unmount();
+    h.state.tournament = undefined;
+    render(<TournamentPage />);
+    expect(document.title).toBe("Tournament not found · Volley");
   });
 });

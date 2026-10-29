@@ -60,6 +60,7 @@ vi.mock("../lib/trpc", () => {
 
 import { planBracket } from "../server/bracketPlan";
 import EventPage from "../app/event/[id]/page";
+import { expectAccessible } from "./a11y";
 
 const OWNER = "owner";
 const team = (n: number) => ({ id: `t${n}`, name: `Team ${n}`, seed: n, status: "REGISTERED" });
@@ -331,5 +332,82 @@ describe("event page when the event can't be loaded", () => {
     h.state.event = undefined;
     render(<EventPage />);
     expect(screen.getByRole("heading", { name: "Event not found" })).toBeTruthy();
+  });
+});
+
+describe("event page accessibility", () => {
+  // The root layout owns the main landmark, so a page must not add a second one.
+  const oneMain = () => {
+    expect(screen.queryAllByRole("main")).toHaveLength(0);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  };
+
+  it("has no violations for the owner before a bracket exists", async () => {
+    h.state.userId = OWNER;
+    h.state.teams = [team(1), team(2), { ...team(3), status: "WITHDRAWN" }];
+    const { container } = render(<EventPage />);
+    oneMain();
+    await expectAccessible(container);
+  });
+
+  it("has no violations for a visitor before a bracket exists", async () => {
+    h.state.teams = [team(1), team(2)];
+    const { container } = render(<EventPage />);
+    oneMain();
+    await expectAccessible(container);
+  });
+
+  it("has no violations with a single-elimination bracket, a live match and a finished one", async () => {
+    h.state.event = event([{ id: "s1", type: "SINGLE_ELIM" }]);
+    h.state.matches = stored(4, "single", {
+      "r1-m1": { status: "COMPLETED", winnerId: "t1", games: [{ gameNumber: 1, team1Score: 25, team2Score: 18, winnerId: "t1" }] },
+      "r1-m2": { status: "IN_PROGRESS", court: { name: "Net 2" } },
+    });
+    const { container } = render(<EventPage />);
+    oneMain();
+    await expectAccessible(container);
+  });
+
+  it("has no violations with a double-elimination bracket", async () => {
+    h.state.event = event([{ id: "s1", type: "DOUBLE_ELIM" }]);
+    h.state.matches = stored(4, "double");
+    const { container } = render(<EventPage />);
+    await expectAccessible(container);
+  });
+
+  it("has no violations with the owner's match view and scorer open", async () => {
+    h.state.userId = OWNER;
+    h.state.event = event([{ id: "s1", type: "SINGLE_ELIM" }]);
+    h.state.matches = stored(4, "single");
+    const { container } = render(<EventPage />);
+    await userEvent.click(container.querySelector('[data-match-id="r1-m1"]')!);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    await expectAccessible(document.body); // the match view is portaled outside the page
+  });
+
+  it("has no violations while confirming deleting the bracket", async () => {
+    h.state.userId = OWNER;
+    h.state.event = event([{ id: "s1", type: "SINGLE_ELIM" }]);
+    h.state.matches = stored(4, "single");
+    const { container } = render(<EventPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Delete bracket" }));
+    await expectAccessible(container);
+  });
+
+  it("has no violations when the event can't be found", async () => {
+    h.state.event = undefined;
+    const { container } = render(<EventPage />);
+    await expectAccessible(container);
+  });
+});
+
+describe("event page title", () => {
+  it("names the event and its tournament, and says when it can't be found", () => {
+    const first = render(<EventPage />);
+    expect(document.title).toBe("Mixed Doubles · Summer Open · Volley");
+    first.unmount();
+    h.state.event = undefined;
+    render(<EventPage />);
+    expect(document.title).toBe("Event not found · Volley");
   });
 });

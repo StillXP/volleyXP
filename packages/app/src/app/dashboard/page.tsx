@@ -8,8 +8,10 @@ import { cssVars } from "@lockin/tokens";
 import { trpc } from "../../lib/trpc";
 import { authClient } from "../../lib/auth-client";
 import { statusTag } from "../../lib/tournamentStatus";
+import { useDocumentTitle } from "../../lib/useDocumentTitle";
 
 export default function DashboardPage() {
+  useDocumentTitle("Tournaments");
   const router = useRouter();
   const [name, setName] = useState("");
   const { data: tournaments, refetch } = trpc.tournament.getMine.useQuery();

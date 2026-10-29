@@ -7,6 +7,7 @@ import type { RadioOption } from '@lockin/react'
 import { cssVars } from '@lockin/tokens'
 import { Bracket } from '@volley/bracket'
 import type { BracketTeam, BracketMatchData } from '@volley/bracket'
+import { useDocumentTitle } from './lib/useDocumentTitle'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -277,6 +278,7 @@ const BracketScroll = styled.div<{ $isDragging: boolean }>`
 
 export default function App() {
   const [step, setStep] = useState<Step>('team-count')
+  useDocumentTitle('Bracket generator')
   const [teamCount, setTeamCount] = useState<number>(8)
   const [teamNames, setTeamNames] = useState<string[]>(() =>
     Array.from({ length: 8 }, (_, i) => `Team${i + 1}`)

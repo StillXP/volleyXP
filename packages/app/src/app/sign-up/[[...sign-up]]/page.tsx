@@ -6,8 +6,10 @@ import { Button, InputField, Link } from "@lockin/react";
 import { cssVars } from "@lockin/tokens";
 import { useRouter } from "next/navigation";
 import { authClient } from "../../../lib/auth-client";
+import { useDocumentTitle } from "../../../lib/useDocumentTitle";
 
 export default function SignUpPage() {
+  useDocumentTitle("Create an account");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
