@@ -5,6 +5,8 @@ import { matchRouter } from "./routers/match";
 import { eventRouter } from "./routers/event";
 import { stageRouter } from "./routers/stage";
 import { poolRouter } from "./routers/pool";
+import { locationRouter } from "./routers/location";
+import { courtRouter } from "./routers/court";
 
 export const appRouter = router({
   tournament: tournamentRouter,
@@ -13,6 +15,8 @@ export const appRouter = router({
   event: eventRouter,
   stage: stageRouter,
   pool: poolRouter,
+  location: locationRouter,
+  court: courtRouter,
 });
 
 export type AppRouter = typeof appRouter;

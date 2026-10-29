@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
-import { assertTournamentOwner } from "../ownership";
+import { assertLocationOwner, assertTournamentOwner } from "../ownership";
 import { TournamentStatus } from "../../generated/prisma/client";
 
 // Public responses never include the owner's email.
@@ -46,6 +46,18 @@ export const tournamentRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.tournament.create({
         data: { name: input.name, description: input.description, ownerId: ctx.userId },
+      });
+    }),
+
+  // Links the tournament to one of the caller's venues, or clears it with null.
+  setLocation: protectedProcedure
+    .input(z.object({ id: z.string(), locationId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertTournamentOwner(ctx.prisma, ctx.userId, input.id);
+      if (input.locationId) await assertLocationOwner(ctx.prisma, ctx.userId, input.locationId);
+      return ctx.prisma.tournament.update({
+        where: { id: input.id },
+        data: { locationId: input.locationId },
       });
     }),
 
