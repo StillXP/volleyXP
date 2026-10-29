@@ -10,14 +10,15 @@
     "build": "npm run build --workspace=packages/design-system && npm run build --workspace=packages/app",
     "storybook": "npm run storybook --workspace=packages/design-system",
     "test": "npm run test:run --workspaces",
-    "type-check": "npm run type-check --workspaces"
+    "type-check": "npm run type-check --workspaces",
+    "vendor:lockin": "node scripts/vendor-lockin.mjs"
   },
   "devDependencies": {
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@lockin/icons": "file:../../Design System Lock In/packages/icons",
-    "@lockin/react": "file:../../Design System Lock In/packages/react",
-    "@lockin/tokens": "file:../../Design System Lock In/packages/tokens"
+    "@lockin/icons": "file:vendor/lockin-icons-0.1.0.tgz",
+    "@lockin/react": "file:vendor/lockin-react-0.1.0.tgz",
+    "@lockin/tokens": "file:vendor/lockin-tokens-0.1.0.tgz"
   }
 }
