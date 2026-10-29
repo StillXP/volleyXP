@@ -2,8 +2,11 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import styled from 'styled-components'
-import { Button, TextField, Dropdown, Bracket } from '@design-system/components'
-import type { BracketTeam, BracketMatchData, DropdownOption } from '@design-system/components'
+import { Button, InputField, RadioGroup } from '@lockin/react'
+import type { RadioOption } from '@lockin/react'
+import { cssVars } from '@lockin/tokens'
+import { Bracket } from '@design-system/components'
+import type { BracketTeam, BracketMatchData } from '@design-system/components'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,71 +14,68 @@ type Step = 'team-count' | 'elim-format' | 'match-format' | 'bracket'
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
-const ELIM_FORMAT_OPTIONS: DropdownOption<string>[] = [
-  { value: 'single', label: 'Single Elimination' },
-  { value: 'double', label: 'Double Elimination' },
+const ELIM_FORMAT_OPTIONS: RadioOption[] = [
+  { value: 'single', label: 'Single Elimination', description: 'One loss ends your run.' },
+  { value: 'double', label: 'Double Elimination', description: 'A second chance through the losers bracket.' },
 ]
 
-const MATCH_FORMAT_OPTIONS: DropdownOption<number>[] = [
-  { value: 3, label: 'Best of 3' },
-  { value: 5, label: 'Best of 5' },
+const MATCH_FORMAT_OPTIONS: RadioOption[] = [
+  { value: '3', label: 'Best of 3' },
+  { value: '5', label: 'Best of 5' },
 ]
 
 // ─── Shared wizard layout ─────────────────────────────────────────────────────
 
 const WizardPage = styled.div`
   min-height: 100vh;
-  background: ${({ theme }) => theme.color.neutral[100]};
+  background: ${cssVars.color.background.subtle};
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: ${({ theme }) => theme.spacing[10]} ${({ theme }) => theme.spacing[4]};
+  padding: ${cssVars.space['2xl']} ${cssVars.space.md};
 `
 
 const WizardCard = styled.div`
-  background: ${({ theme }) => theme.color.neutral[0]};
-  border: 1px solid ${({ theme }) => theme.color.neutral[200]};
-  border-radius: ${({ theme }) => theme.border.radius.xl};
-  box-shadow: ${({ theme }) => theme.shadow.md};
-  padding: ${({ theme }) => theme.spacing[8]};
+  background: ${cssVars.color.surface.default};
+  border: ${cssVars.border.width.thin} solid ${cssVars.color.border.subtle};
+  border-radius: ${cssVars.radius.xl};
+  box-shadow: ${cssVars.shadow.md};
+  padding: ${cssVars.space.xl};
   width: 100%;
   max-width: 540px;
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[6]};
+  gap: ${cssVars.space.lg};
 `
 
 const StepHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
 `
 
 const StepLabel = styled.span`
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.semibold};
-  color: ${({ theme }) => theme.color.brand.primary};
+  font: ${cssVars.typography.overline};
+  letter-spacing: var(--ds-typography-overline-letter-spacing);
+  color: ${cssVars.color.text.brand};
   text-transform: uppercase;
-  letter-spacing: 0.08em;
 `
 
 const StepTitle = styled.h1`
-  font-size: ${({ theme }) => theme.typography.fontSize.xl};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
-  color: ${({ theme }) => theme.color.neutral[900]};
-  line-height: ${({ theme }) => theme.typography.lineHeight.tight};
+  font: ${cssVars.typography.heading.md};
+  letter-spacing: var(--ds-typography-heading-md-letter-spacing);
+  color: ${cssVars.color.text.primary};
 `
 
 const StepSubtitle = styled.p`
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
-  color: ${({ theme }) => theme.color.neutral[500]};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
-  margin-top: ${({ theme }) => theme.spacing[1]};
+  font: ${cssVars.typography.body.sm};
+  color: ${cssVars.color.text.secondary};
+  margin-top: ${cssVars.space['2xs']};
 `
 
 const Actions = styled.div`
   display: flex;
-  gap: ${({ theme }) => theme.spacing[3]};
+  gap: ${cssVars.space.sm};
   justify-content: flex-end;
 `
 
@@ -89,6 +89,8 @@ interface StepTeamCountProps {
 
 function StepTeamCount({ value, onChange, onNext }: StepTeamCountProps) {
   const [raw, setRaw] = React.useState(String(value))
+  const [showError, setShowError] = React.useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
   const parsed = parseInt(raw, 10)
   const isValid = !isNaN(parsed) && parsed >= 2 && parsed <= 64
 
@@ -98,24 +100,39 @@ function StepTeamCount({ value, onChange, onNext }: StepTeamCountProps) {
     if (!isNaN(n) && n >= 2 && n <= 64) onChange(n)
   }
 
+  // Validate on blur / submit rather than every keystroke, and keep Next enabled
+  // so the error explains what to fix (Lock In form guidance).
+  function handleNext() {
+    if (isValid) {
+      onNext()
+    } else {
+      setShowError(true)
+      inputRef.current?.focus()
+    }
+  }
+
   return (
     <WizardCard>
       <StepHeader>
         <StepLabel>Step 1 of 3</StepLabel>
         <StepTitle>How many teams?</StepTitle>
-        <StepSubtitle>Enter a number between 2 and 64.</StepSubtitle>
       </StepHeader>
-      <TextField
+      <InputField
+        ref={inputRef}
         label="Number of teams"
+        hint="Enter a number between 2 and 64."
         type="number"
+        inputMode="numeric"
         min={2}
         max={64}
+        required
         value={raw}
         onChange={handleChange}
-        errorText={raw !== '' && !isValid ? 'Must be between 2 and 64' : undefined}
+        onBlur={() => setShowError(true)}
+        error={showError && !isValid ? 'Enter a number from 2 to 64' : undefined}
       />
       <Actions>
-        <Button onClick={onNext} disabled={!isValid}>Next</Button>
+        <Button onClick={handleNext}>Next</Button>
       </Actions>
     </WizardCard>
   )
@@ -136,15 +153,13 @@ function StepElimFormat({ value, onChange, onBack, onNext }: StepElimFormatProps
       <StepHeader>
         <StepLabel>Step 2 of 3</StepLabel>
         <StepTitle>Elimination format</StepTitle>
-        <StepSubtitle>
-          Single elimination: one loss ends your run. Double elimination: you get a second chance through the losers bracket.
-        </StepSubtitle>
       </StepHeader>
-      <Dropdown<string>
-        label="Elimination format"
+      <RadioGroup
+        legend="Elimination format"
+        hideLegend
         options={ELIM_FORMAT_OPTIONS}
         value={value}
-        onChange={v => onChange(v as 'single' | 'double')}
+        onValueChange={v => onChange(v as 'single' | 'double')}
       />
       <Actions>
         <Button variant="secondary" onClick={onBack}>Back</Button>
@@ -154,7 +169,7 @@ function StepElimFormat({ value, onChange, onBack, onNext }: StepElimFormatProps
   )
 }
 
-// ─── Step 4: Match format ─────────────────────────────────────────────────────
+// ─── Step 3: Match format ─────────────────────────────────────────────────────
 
 interface StepMatchFormatProps {
   value: 3 | 5
@@ -171,15 +186,16 @@ function StepMatchFormat({ value, onChange, onBack, onGenerate }: StepMatchForma
         <StepTitle>Match format</StepTitle>
         <StepSubtitle>Choose how many sets each match will be played to determine a winner.</StepSubtitle>
       </StepHeader>
-      <Dropdown<number>
-        label="Sets per match"
+      <RadioGroup
+        legend="Sets per match"
+        hideLegend
         options={MATCH_FORMAT_OPTIONS}
-        value={value}
-        onChange={v => onChange(v as 3 | 5)}
+        value={String(value)}
+        onValueChange={v => onChange(Number(v) as 3 | 5)}
       />
       <Actions>
         <Button variant="secondary" onClick={onBack}>Back</Button>
-        <Button onClick={onGenerate}>Generate Bracket</Button>
+        <Button onClick={onGenerate}>Generate bracket</Button>
       </Actions>
     </WizardCard>
   )
@@ -198,29 +214,12 @@ function getDefaultZoom(): number {
   return 1
 }
 
-const ZoomOutIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
-    <line x1="7" y1="11" x2="15" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <line x1="16.5" y1="16.5" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-)
-
-const ZoomInIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
-    <line x1="7" y1="11" x2="15" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <line x1="11" y1="7" x2="11" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <line x1="16.5" y1="16.5" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-)
-
 const ZoomControls = styled.div`
   position: fixed;
-  bottom: ${({ theme }) => theme.spacing[6]};
-  right: ${({ theme }) => theme.spacing[6]};
+  bottom: ${cssVars.space.lg};
+  right: ${cssVars.space.lg};
   display: flex;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
   align-items: center;
   z-index: 10;
 `
@@ -228,39 +227,43 @@ const ZoomControls = styled.div`
 const BracketPage = styled.div`
   height: 100vh;
   overflow: hidden;
-  background: ${({ theme }) => theme.color.neutral[100]};
+  background: ${cssVars.color.background.subtle};
   display: flex;
   flex-direction: column;
 `
 
 const BracketPageHeader = styled.header`
-  background: ${({ theme }) => theme.color.neutral[0]};
-  border-bottom: 1px solid ${({ theme }) => theme.color.neutral[200]};
-  padding: ${({ theme }) => theme.spacing[5]} ${({ theme }) => theme.spacing[8]};
+  background: ${cssVars.color.surface.default};
+  border-bottom: ${cssVars.border.width.thin} solid ${cssVars.color.border.subtle};
+  padding: ${cssVars.space.md} ${cssVars.space.xl};
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: ${({ theme }) => theme.spacing[4]};
+  gap: ${cssVars.space.md};
   flex-shrink: 0;
 `
 
 const BracketPageTitle = styled.h1`
-  font-size: ${({ theme }) => theme.typography.fontSize.lg};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
-  color: ${({ theme }) => theme.color.neutral[900]};
+  font: ${cssVars.typography.heading.xs};
+  color: ${cssVars.color.text.primary};
 `
 
 const BracketPageMeta = styled.p`
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
-  color: ${({ theme }) => theme.color.neutral[500]};
-  margin-top: ${({ theme }) => theme.spacing[1]};
+  font: ${cssVars.typography.body.sm};
+  color: ${cssVars.color.text.secondary};
+  margin-top: ${cssVars.space['2xs']};
 `
 
+const HeaderActions = styled.div`
+  display: flex;
+  gap: ${cssVars.space.xs};
+  flex-shrink: 0;
+`
 
 const BracketScroll = styled.div<{ $isDragging: boolean }>`
   flex: 1;
   overflow: auto;
-  padding: ${({ theme }) => theme.spacing[8]};
+  padding: ${cssVars.space.xl};
   cursor: ${({ $isDragging }) => ($isDragging ? 'grabbing' : 'grab')};
   user-select: none;
   touch-action: pan-x pan-y;
@@ -522,12 +525,14 @@ export default function App() {
               {teamCount} Teams · {elimFormat === 'double' ? 'Double' : 'Single'} Elimination · Best of {matchFormat}
             </BracketPageMeta>
           </div>
-          <Button variant="secondary" onClick={handleLoadExample} disabled={isLoadingExample}>
-            {isLoadingExample ? 'Loading…' : 'Load example data'}
-          </Button>
-          <Button variant="secondary" onClick={() => { setStep('team-count'); setMatchData([]); setZoom(getDefaultZoom()) }}>
-            Start Over
-          </Button>
+          <HeaderActions>
+            <Button variant="secondary" onClick={handleLoadExample} loading={isLoadingExample} loadingLabel="Loading example data">
+              Load example data
+            </Button>
+            <Button variant="secondary" onClick={() => { setStep('team-count'); setMatchData([]); setZoom(getDefaultZoom()) }}>
+              Start over
+            </Button>
+          </HeaderActions>
         </BracketPageHeader>
         <BracketScroll
           ref={scrollRef}
@@ -542,12 +547,8 @@ export default function App() {
           </div>
         </BracketScroll>
         <ZoomControls>
-          <Button variant="secondary" size="sm" onClick={handleZoomIn} disabled={zoom >= ZOOM_MAX} aria-label="Zoom in">
-            <ZoomInIcon />
-          </Button>
-          <Button variant="secondary" size="sm" onClick={handleZoomOut} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out">
-            <ZoomOutIcon />
-          </Button>
+          <Button variant="secondary" size="sm" iconOnly iconStart="plus" onClick={handleZoomIn} disabled={zoom >= ZOOM_MAX} aria-label="Zoom in" />
+          <Button variant="secondary" size="sm" iconOnly iconStart="minus" onClick={handleZoomOut} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out" />
           <Button variant="secondary" size="sm" onClick={handleZoomReset} disabled={zoom === 1}>
             Reset
           </Button>

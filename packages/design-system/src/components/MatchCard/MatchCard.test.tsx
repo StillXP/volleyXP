@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { cssVars } from '@lockin/tokens';
 import { MatchCard } from './MatchCard';
 
 const team1 = { seed: 1, name: 'Team Alpha', setScores: [21, 15], totalSets: 2, winner: true };
@@ -63,10 +64,10 @@ describe('MatchCard', () => {
     const secondSetWinner = screen.getAllByText('21')[1];
     const secondSetLoser = screen.getByText('15');
 
-    expect(window.getComputedStyle(firstSetWinner).fontWeight).toBe('700');
-    expect(window.getComputedStyle(secondSetWinner).fontWeight).toBe('700');
-    expect(window.getComputedStyle(firstSetLoser).fontWeight).toBe('400');
-    expect(window.getComputedStyle(secondSetLoser).fontWeight).toBe('400');
+    expect(window.getComputedStyle(firstSetWinner).fontWeight).toBe(cssVars.font.weight.bold);
+    expect(window.getComputedStyle(secondSetWinner).fontWeight).toBe(cssVars.font.weight.bold);
+    expect(window.getComputedStyle(firstSetLoser).fontWeight).toBe(cssVars.font.weight.regular);
+    expect(window.getComputedStyle(secondSetLoser).fontWeight).toBe(cssVars.font.weight.regular);
   });
 
   it('does not bold scores when a set is incomplete', () => {
@@ -81,8 +82,8 @@ describe('MatchCard', () => {
     const completedSetWinner = screen.getByText('21');
     const incompleteSetScore = screen.getByText('10');
 
-    expect(window.getComputedStyle(completedSetWinner).fontWeight).toBe('700');
-    expect(window.getComputedStyle(incompleteSetScore).fontWeight).toBe('400');
+    expect(window.getComputedStyle(completedSetWinner).fontWeight).toBe(cssVars.font.weight.bold);
+    expect(window.getComputedStyle(incompleteSetScore).fontWeight).toBe(cssVars.font.weight.regular);
   });
 
   it('renders seed numbers for non-upcoming matches', () => {

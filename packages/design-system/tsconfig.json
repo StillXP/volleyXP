@@ -17,7 +17,8 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "preserveSymlinks": true
   },
   "include": ["src", "vitest.setup.ts"],
   "exclude": ["node_modules", "dist", "storybook-static"]

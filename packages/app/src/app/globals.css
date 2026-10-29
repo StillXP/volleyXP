@@ -1,0 +1,36 @@
+/* App-level globals. Lock In's base (box-sizing, body font/colors) comes from
+   @lockin/react/styles.css — only add what Lock In doesn't cover. */
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+img,
+picture,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}

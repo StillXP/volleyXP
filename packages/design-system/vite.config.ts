@@ -12,6 +12,8 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    // @lockin/* are symlinked from the Lock In repo; resolve their React from this workspace.
+    preserveSymlinks: true,
     alias: {
       '@': resolve(__dirname, 'src'),
     },
@@ -24,7 +26,7 @@ export default defineConfig({
       fileName: (format) => format === 'es' ? 'index.js' : 'index.cjs',
     },
     rollupOptions: {
-      external: ['react', 'react/jsx-runtime', 'react-dom', 'styled-components'],
+      external: ['react', 'react/jsx-runtime', 'react-dom', 'styled-components', /^@lockin\//],
       output: {
         globals: {
           react: 'React',
@@ -39,5 +41,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
+    // Lock In ships bundler-style ESM (extensionless imports); let Vite transform it.
+    server: { deps: { inline: [/@lockin\//] } },
   },
 });

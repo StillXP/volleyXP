@@ -1,14 +1,23 @@
 import styled, { css } from 'styled-components';
-import type { MatchCardColorScheme, MatchCardStatus } from './MatchCard';
+import { cssVars } from '@lockin/tokens';
+import type { MatchCardStatus } from './MatchCard';
+
+// Pixel geometry here feeds CARD_HEIGHT / CARD_DIVIDER_OFFSET in Bracket.tsx —
+// keep spacing, border widths and line heights in sync with those constants.
+
+const fontBase = css`
+  font-family: ${cssVars.font.family.sans};
+  line-height: ${cssVars.font.lineHeight.normal};
+`;
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-export const StyledMatchCard = styled.div<{ $colorScheme: MatchCardColorScheme; $scoreOnly?: boolean }>`
+export const StyledMatchCard = styled.div<{ $scoreOnly?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[1]};
+  gap: ${cssVars.space['2xs']};
 
-  ${({ $scoreOnly, theme }) =>
+  ${({ $scoreOnly }) =>
     $scoreOnly
       ? css`
           width: 100%;
@@ -16,7 +25,7 @@ export const StyledMatchCard = styled.div<{ $colorScheme: MatchCardColorScheme; 
         `
       : css`
           width: 280px;
-          padding: ${theme.spacing[2]} 0;
+          padding: ${cssVars.space.xs} 0;
         `}
 `;
 
@@ -27,7 +36,8 @@ export const StyledScoreCardWrapper = styled.div`
   width: 100%;
 `;
 
-export const StyledMatchIdMarker = styled.div<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledMatchIdMarker = styled.div`
+  ${fontBase}
   position: absolute;
   left: -20px;
   top: 50%;
@@ -37,79 +47,53 @@ export const StyledMatchIdMarker = styled.div<{ $colorScheme: MatchCardColorSche
   align-items: center;
   justify-content: center;
   width: 32px;
-  padding: 2px ${({ theme }) => theme.spacing[1]};
-  border: ${({ theme }) => theme.border.width.default} solid;
-  border-radius: ${({ theme }) => theme.border.radius.sm};
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  padding: 2px ${cssVars.space['2xs']};
+  border: ${cssVars.border.width.thin} solid ${cssVars.color.border.strong};
+  border-radius: ${cssVars.radius.sm};
+  background-color: ${cssVars.color.surface.default};
+  color: ${cssVars.color.text.primary};
+  font-size: ${cssVars.font.size.xs};
+  font-weight: ${cssVars.font.weight.medium};
   text-transform: uppercase;
   text-align: center;
   white-space: nowrap;
-
-  ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark'
-      ? css`
-          background-color: ${theme.color.neutral[0]};
-          border-color: ${theme.color.neutral[900]};
-          color: ${theme.color.neutral[900]};
-        `
-      : css`
-          background-color: ${theme.color.neutral[0]};
-          border-color: ${theme.color.neutral[900]};
-          color: ${theme.color.neutral[900]};
-        `}
 `;
 
 // ─── Score card ───────────────────────────────────────────────────────────────
 
-export const StyledScoreCard = styled.div<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledScoreCard = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
   overflow: hidden;
-  border: ${({ theme }) => theme.border.width.thick} solid;
-  border-radius: 0 ${({ theme }) => theme.border.radius.lg} ${({ theme }) => theme.border.radius.lg} 0;
-
-  ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark'
-      ? css`
-          background-color: ${theme.color.neutral[900]};
-          border-color: ${theme.color.neutral[0]};
-        `
-      : css`
-          background-color: ${theme.color.neutral[0]};
-          border-color: ${theme.color.neutral[900]};
-        `}
+  background-color: ${cssVars.color.surface.default};
+  border: ${cssVars.border.width.thick} solid ${cssVars.color.border.strong};
+  border-radius: 0 ${cssVars.radius.md} ${cssVars.radius.md} 0;
 `;
 
 // ─── Team row ─────────────────────────────────────────────────────────────────
 
 export type TeamRowHighlight = 'win' | 'loss' | 'pending' | false;
 
+const highlightBg: Record<Exclude<TeamRowHighlight, false>, string> = {
+  win: cssVars.color.status.success.bg,
+  loss: cssVars.color.status.danger.bg,
+  pending: cssVars.color.background.muted,
+};
+
 export const StyledTeamRow = styled.div<{
   $status: MatchCardStatus;
-  $colorScheme: MatchCardColorScheme;
   $highlight: TeamRowHighlight;
 }>`
   display: flex;
   align-items: center;
-  padding: ${({ theme }) => theme.spacing[2]};
+  padding: ${cssVars.space.xs};
   width: 100%;
-  gap: ${({ theme }) => theme.spacing[2]};
-  transition: background-color 150ms ease;
+  gap: ${cssVars.space.xs};
+  transition: background-color ${cssVars.motion.duration.fast} ${cssVars.motion.easing.standard};
   cursor: default;
 
-  ${({ $highlight, $colorScheme, theme }) => {
-    if (!$highlight) return null;
-    const bg = {
-      win:     $colorScheme === 'dark' ? theme.color.green[700]   : theme.color.green[0],
-      loss:    $colorScheme === 'dark' ? theme.color.red[700]     : theme.color.red[100],
-      pending: $colorScheme === 'dark' ? theme.color.neutral[700] : theme.color.neutral[200],
-    }[$highlight];
-    return css`background-color: ${bg};`;
-  }}
+  ${({ $highlight }) => $highlight && css`background-color: ${highlightBg[$highlight]};`}
 `;
 
 export const StyledTeamLeft = styled.div`
@@ -117,36 +101,33 @@ export const StyledTeamLeft = styled.div`
   flex: 1;
   min-width: 0;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
 `;
 
-export const StyledSeed = styled.span<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledSeed = styled.span`
   flex-shrink: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
+  font-family: ${cssVars.font.family.sans};
+  font-size: ${cssVars.font.size.xs};
+  font-weight: ${cssVars.font.weight.regular};
   line-height: 16px;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
+  color: ${cssVars.color.text.secondary};
 `;
 
 export const StyledTeamName = styled.p<{
   $status: MatchCardStatus;
   $winner: boolean;
-  $colorScheme: MatchCardColorScheme;
   $isPlaceholder: boolean;
 }>`
+  ${fontBase}
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.base};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  font-size: ${cssVars.font.size.md};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
+  color: ${({ $isPlaceholder }) =>
+    $isPlaceholder ? cssVars.color.text.secondary : cssVars.color.text.primary};
 
   ${({ $isPlaceholder }) =>
     $isPlaceholder &&
@@ -155,7 +136,7 @@ export const StyledTeamName = styled.p<{
     `}
 
   font-weight: ${({ $winner, $status }) =>
-    $winner && $status === 'completed' ? 700 : 400};
+    $winner && $status === 'completed' ? cssVars.font.weight.bold : cssVars.font.weight.regular};
 `;
 
 // ─── Score columns ────────────────────────────────────────────────────────────
@@ -164,71 +145,61 @@ export const StyledTeamRight = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
   flex-shrink: 0;
 `;
 
-export const StyledSetScores = styled.div<{
-  $colorScheme: MatchCardColorScheme;
-}>`
+export const StyledSetScores = styled.div`
   display: flex;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
   align-items: center;
   justify-content: flex-end;
   width: 64px;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
+  font-family: ${cssVars.font.family.sans};
+  font-size: ${cssVars.font.size.xs};
   line-height: 16px;
   text-align: center;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
+  color: ${cssVars.color.text.primary};
+  font-weight: ${cssVars.font.weight.regular};
 `;
 
 export const StyledSetScore = styled.span<{ $winner?: boolean }>`
   width: 16px;
   flex-shrink: 0;
-  font-weight: ${({ $winner, theme }) =>
-    $winner ? theme.typography.fontWeight.bold : theme.typography.fontWeight.regular};
+  font-weight: ${({ $winner }) => ($winner ? cssVars.font.weight.bold : cssVars.font.weight.regular)};
 `;
 
-export const StyledSetBadge = styled.div<{
-  $winner: boolean;
-  $colorScheme: MatchCardColorScheme;
-}>`
+export const StyledSetBadge = styled.div<{ $winner: boolean }>`
+  ${fontBase}
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 20px;
-  padding: 0 ${({ theme }) => theme.spacing[1]};
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.base};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  padding: 0 ${cssVars.space['2xs']};
+  font-size: ${cssVars.font.size.md};
   text-align: center;
   white-space: nowrap;
 
-  ${({ $winner, $colorScheme, theme }) =>
+  ${({ $winner }) =>
     $winner
       ? css`
-          background-color: ${theme.color.green[700]};
-          color: ${theme.color.neutral[0]};
-          font-weight: ${theme.typography.fontWeight.bold};
+          background-color: ${cssVars.color.status.success.solid};
+          color: ${cssVars.color.status.success.onSolid};
+          font-weight: ${cssVars.font.weight.bold};
         `
       : css`
-          color: ${$colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
-          font-weight: ${theme.typography.fontWeight.semibold};
+          color: ${cssVars.color.text.primary};
+          font-weight: ${cssVars.font.weight.semibold};
         `}
 `;
 
 // ─── Divider ──────────────────────────────────────────────────────────────────
 
-export const StyledDivider = styled.div<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledDivider = styled.div`
   height: 0;
   width: 100%;
-  border-top: 1px solid;
-  border-color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
+  border-top: ${cssVars.border.width.thin} solid ${cssVars.color.border.default};
 `;
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
@@ -243,41 +214,36 @@ export const StyledFooter = styled.div`
 export const StyledStatusGroup = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing[1]};
+  gap: ${cssVars.space['2xs']};
   flex: 1;
   min-width: 0;
+  color: ${cssVars.color.icon.secondary};
 `;
 
+const statusColor: Record<MatchCardStatus, string> = {
+  completed: cssVars.color.text.success,
+  live: cssVars.color.text.danger,
+  upcoming: cssVars.color.text.info,
+};
+
 export const StyledStatusLabel = styled.span<{ $status: MatchCardStatus }>`
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.semibold};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  ${fontBase}
+  font-size: ${cssVars.font.size.xs};
+  font-weight: ${cssVars.font.weight.semibold};
   text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
-
-  ${({ $status, theme }) => {
-    if ($status === 'completed') {
-      return css`color: ${theme.color.green[700]};`;
-    }
-    if ($status === 'live') {
-      return css`color: ${theme.color.red[900]};`;
-    }
-    return css`color: ${theme.color.blue[900]};`;
-  }}
+  color: ${({ $status }) => statusColor[$status]};
 `;
 
-export const StyledFooterMeta = styled.div<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledFooterMeta = styled.div`
+  ${fontBase}
   display: flex;
-  gap: ${({ theme }) => theme.spacing[1]};
+  gap: ${cssVars.space['2xs']};
   align-items: center;
   flex-shrink: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  font-size: ${cssVars.font.size.xs};
+  font-weight: ${cssVars.font.weight.regular};
   white-space: nowrap;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[0] : theme.color.neutral[900]};
+  color: ${cssVars.color.text.secondary};
 `;

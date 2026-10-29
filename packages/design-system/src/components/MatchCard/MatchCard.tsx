@@ -20,7 +20,6 @@ import {
 } from './MatchCard.styles';
 
 export type MatchCardStatus = 'completed' | 'live' | 'upcoming';
-export type MatchCardColorScheme = 'light' | 'dark';
 
 export interface MatchCardTeam {
   /** Seed number shown before team name */
@@ -44,8 +43,6 @@ export interface MatchCardProps {
   matchId?: string;
   /** Current match status */
   status?: MatchCardStatus;
-  /** Light or dark color scheme */
-  colorScheme?: MatchCardColorScheme;
   /** Top team data */
   team1?: MatchCardTeam;
   /** Bottom team data */
@@ -84,13 +81,12 @@ interface TeamRowProps {
   team: MatchCardTeam;
   opponent?: MatchCardTeam;
   status: MatchCardStatus;
-  colorScheme: MatchCardColorScheme;
   highlightedTeamId?: string | undefined;
   onTeamHover?: ((teamId: string) => void) | undefined;
   onTeamLeave?: (() => void) | undefined;
 }
 
-function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTeamHover, onTeamLeave }: TeamRowProps) {
+function TeamRow({ team, opponent, status, highlightedTeamId, onTeamHover, onTeamLeave }: TeamRowProps) {
   const isUpcoming = status === 'upcoming';
   const isWinner = status === 'completed' && !!team.winner;
   const opponentScores = opponent?.setScores ?? [];
@@ -104,23 +100,22 @@ function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTea
   return (
     <StyledTeamRow
       $status={status}
-      $colorScheme={colorScheme}
       $highlight={highlight}
       onMouseEnter={team.teamId ? () => onTeamHover?.(team.teamId!) : undefined}
       onMouseLeave={team.teamId ? onTeamLeave : undefined}
     >
       <StyledTeamLeft>
         {team.seed != null && (
-          <StyledSeed $colorScheme={colorScheme}>{team.seed}</StyledSeed>
+          <StyledSeed>{team.seed}</StyledSeed>
         )}
-        <StyledTeamName $status={status} $winner={isWinner} $colorScheme={colorScheme} $isPlaceholder={!!team.isPlaceholder}>
+        <StyledTeamName $status={status} $winner={isWinner} $isPlaceholder={!!team.isPlaceholder}>
           {team.name}
         </StyledTeamName>
       </StyledTeamLeft>
       {!isUpcoming && (
         <StyledTeamRight>
           {team.setScores && team.setScores.length > 0 && (
-            <StyledSetScores $colorScheme={colorScheme}>
+            <StyledSetScores>
               {team.setScores.map((score, i) => (
                 <StyledSetScore
                   key={i}
@@ -132,7 +127,7 @@ function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTea
             </StyledSetScores>
           )}
           {team.totalSets != null && (
-            <StyledSetBadge $winner={isWinner} $colorScheme={colorScheme}>
+            <StyledSetBadge $winner={isWinner}>
               {team.totalSets}
             </StyledSetBadge>
           )}
@@ -145,7 +140,6 @@ function TeamRow({ team, opponent, status, colorScheme, highlightedTeamId, onTea
 export function MatchCard({
   matchId,
   status = 'completed',
-  colorScheme = 'light',
   team1 = { seed: 12, name: 'Team 1', setScores: [19, 12], totalSets: 0 },
   team2 = { name: 'Team 2', setScores: [21, 21], totalSets: 2, winner: true },
   location = 'Court 2',
@@ -161,15 +155,15 @@ export function MatchCard({
   const isUpcoming = status === 'upcoming';
 
   return (
-    <StyledMatchCard $colorScheme={colorScheme} $scoreOnly={scoreOnly} className={className}>
+    <StyledMatchCard $scoreOnly={scoreOnly} className={className}>
       <StyledScoreCardWrapper>
         {!scoreOnly && matchId && (
-          <StyledMatchIdMarker $colorScheme={colorScheme}>{matchId}</StyledMatchIdMarker>
+          <StyledMatchIdMarker>{matchId}</StyledMatchIdMarker>
         )}
-        <StyledScoreCard $colorScheme={colorScheme}>
-          <TeamRow team={team1} opponent={team2} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
-          <StyledDivider $colorScheme={colorScheme} />
-          <TeamRow team={team2} opponent={team1} status={status} colorScheme={colorScheme} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
+        <StyledScoreCard>
+          <TeamRow team={team1} opponent={team2} status={status} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
+          <StyledDivider />
+          <TeamRow team={team2} opponent={team1} status={status} highlightedTeamId={highlightedTeamId} onTeamHover={onTeamHover} onTeamLeave={onTeamLeave} />
         </StyledScoreCard>
       </StyledScoreCardWrapper>
       {!scoreOnly && (
@@ -189,7 +183,7 @@ export function MatchCard({
             )}
           </StyledStatusGroup>
           {(isLive || isUpcoming) && (
-            <StyledFooterMeta $colorScheme={colorScheme}>
+            <StyledFooterMeta>
               {location && <span>{location}</span>}
               {isUpcoming && startTime && <span>{startTime}</span>}
             </StyledFooterMeta>
