@@ -33,8 +33,8 @@ describe.skipIf(!url)("against a real database", () => {
   let eventId: string;
 
   beforeAll(async () => {
-    const user = await prisma.user.create({ data: { email: `owner-${run}@test.io`, name: "Owner" } });
-    const other = await prisma.user.create({ data: { email: `other-${run}@test.io`, name: "Other" } });
+    const user = await prisma.user.create({ data: { email: `owner-${run}@test.io`, name: "Olive Owner", firstName: "Olive", lastName: "Owner" } });
+    const other = await prisma.user.create({ data: { email: `other-${run}@test.io`, name: "Otis Other", firstName: "Otis", lastName: "Other" } });
     userId = user.id;
     otherUserId = other.id;
     me = as(userId);
@@ -277,7 +277,7 @@ describe.skipIf(!url)("against a real database", () => {
 
       const list = (await as(otherUserId).tournament.listPublic()).filter((t) => t.name.startsWith(tag));
       expect(list.map((t) => t.name.slice(tag.length + 1))).toEqual(["late", "venue", "early", "undated"]);
-      expect(list.find((t) => t.name.endsWith("venue"))).toMatchObject({ location: { name: "Listing Venue" }, owner: { id: userId, name: "Owner" }, _count: { events: 0 } });
+      expect(list.find((t) => t.name.endsWith("venue"))).toMatchObject({ location: { name: "Listing Venue" }, owner: { id: userId, name: "Olive Owner" }, _count: { events: 0 } });
       expect(JSON.stringify(list)).not.toContain("@test.io");
     });
   });
@@ -299,7 +299,7 @@ describe.skipIf(!url)("against a real database", () => {
         name: `Page ${run}`,
         description: "Two days.",
         status: "DRAFT",
-        owner: { id: userId, name: "Owner" },
+        owner: { id: userId, name: "Olive Owner" },
         location: { name: "Page Park", address: "1 Park Rd" },
       });
       expect(JSON.stringify(page)).not.toContain("@test.io");
