@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
 import { assertEventOwner, assertTournamentOwner } from "../ownership";
 import { writeBracket } from "../bracketWrite";
-import { EventStatus } from "../../generated/prisma/client";
+import { conflict, lockEvent, promoteWaitlist } from "../registration";
 
 // A best-of series needs an odd number of games so it can't end level.
 const bestOf = z.number().int().min(1).max(7).refine((n) => n % 2 === 1, "bestOf must be odd");
@@ -77,13 +77,38 @@ export const eventRouter = router({
         // Null clears an optional setting.
         entryCap: z.number().int().min(1).nullable().optional(),
         pointsToWinLastGame: z.number().int().min(1).nullable().optional(),
-        status: z.nativeEnum(EventStatus).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       await assertEventOwner(ctx.prisma, ctx.userId, id);
-      return ctx.prisma.event.update({ where: { id }, data });
+      if (data.entryCap === undefined) return ctx.prisma.event.update({ where: { id }, data });
+
+      // A new cap can free places, so move waitlisted teams up under the registration lock.
+      return ctx.prisma.$transaction(async (tx) => {
+        await lockEvent(tx, id);
+        const event = await tx.event.update({ where: { id }, data });
+        await promoteWaitlist(tx, id, event.entryCap);
+        return event;
+      });
+    }),
+
+  // Opens or closes registration. Once the bracket exists the event has moved on, and
+  // registration can't be reopened.
+  setRegistration: protectedProcedure
+    .input(z.object({ id: z.string(), open: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertEventOwner(ctx.prisma, ctx.userId, input.id);
+      return ctx.prisma.$transaction(async (tx) => {
+        const event = await lockEvent(tx, input.id);
+        if (event.status === "IN_PROGRESS" || event.status === "COMPLETED") {
+          throw conflict("The bracket has been made, so registration can't change");
+        }
+        const status = input.open ? "REGISTRATION" : "SEEDING";
+        if (event.status === status) return tx.event.findUniqueOrThrow({ where: { id: input.id }, select: { id: true, status: true } });
+        if (!input.open && event.status !== "REGISTRATION") throw conflict("Registration isn't open");
+        return tx.event.update({ where: { id: input.id }, data: { status }, select: { id: true, status: true } });
+      });
     }),
 
   delete: protectedProcedure
@@ -110,7 +135,7 @@ export const eventRouter = router({
     return ctx.prisma.$transaction(async (tx) => {
       const tournamentId =
         input.tournamentId ?? (await tx.tournament.create({ data: { name: input.tournamentName!, ownerId: ctx.userId } })).id;
-      const event = await tx.event.create({ data: { ...input.event, tournamentId } });
+      const event = await tx.event.create({ data: { ...input.event, tournamentId, status: "IN_PROGRESS" } });
       await tx.team.createMany({ data: teams.map((t) => ({ ...t, eventId: event.id })) });
       const { stageId } = await writeBracket(tx, { eventId: event.id, teams, format: input.format, order: 1 });
       if (input.nets > 0) {
@@ -155,7 +180,10 @@ export const eventRouter = router({
         }
 
         const last = await tx.stage.aggregate({ where: { eventId: input.eventId }, _max: { order: true } });
-        return writeBracket(tx, { eventId: input.eventId, teams: seeded, format: input.format, order: (last._max.order ?? 0) + 1 });
+        const bracket = await writeBracket(tx, { eventId: input.eventId, teams: seeded, format: input.format, order: (last._max.order ?? 0) + 1 });
+        // The bracket closes registration for good.
+        await tx.event.update({ where: { id: input.eventId }, data: { status: "IN_PROGRESS" } });
+        return bracket;
       });
     }),
 

@@ -19,7 +19,7 @@ function setup(userId: string | null, teams: TeamRow[] = teamsOf(1, 2, 3, 4)) {
   // The transaction callback gets the same fake as its client.
   const tx: { client: unknown } = { client: null };
   const prisma = {
-    event: { findFirst: ownedFindFirst({ e1: OWNER }) },
+    event: { findFirst: ownedFindFirst({ e1: OWNER }), update: vi.fn(async (_args: unknown) => ({})) },
     stage: {
       findFirst: vi.fn(async (_args: unknown): Promise<Row | null> => null),
       aggregate: vi.fn(async (_args: unknown) => ({ _max: { order: null as number | null } })),
@@ -126,6 +126,18 @@ describe("event.generateBracket writes", () => {
     const { caller, prisma } = setup(OWNER);
     await caller.event.generateBracket({ eventId: "e1", format });
     expect(prisma.match.createMany.mock.calls[0]![0].data).toHaveLength(count);
+  });
+
+  it("starts the event, which closes registration for good", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.event.generateBracket(input);
+    expect(prisma.event.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { status: "IN_PROGRESS" } });
+  });
+
+  it("doesn't touch the event if the bracket can't be made", async () => {
+    const { caller, prisma } = setup(OWNER, teamsOf(1));
+    await expect(caller.event.generateBracket(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(prisma.event.update).not.toHaveBeenCalled();
   });
 
   it("puts the event's own teams into the first-round matches", async () => {

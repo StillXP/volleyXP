@@ -101,6 +101,12 @@ describe("event.createWithBracket validation", () => {
     expect(prisma.event.create).toHaveBeenCalledWith({ data: expect.objectContaining({ teamSize: 2 }) });
   });
 
+  it("starts the event straight away, since its bracket is already made", async () => {
+    const { caller, prisma } = setup(OWNER);
+    await caller.event.createWithBracket(inNewTournament);
+    expect(prisma.event.create).toHaveBeenCalledWith({ data: expect.objectContaining({ status: "IN_PROGRESS" }) });
+  });
+
   it("trims team names", async () => {
     const { caller, prisma } = setup(OWNER);
     await caller.event.createWithBracket({ ...inNewTournament, teams: ["  Spikers ", "Setters"] });
