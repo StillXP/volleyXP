@@ -41,11 +41,11 @@ export async function assertTeamOwner(db: Db, userId: string, teamId: string) {
   if (!found) throw notFound("Team");
 }
 
-/** Returns the match's teams so callers can validate scores and winners against them. */
+/** Returns the match's teams and status so callers can validate against them. */
 export async function assertMatchOwner(db: Db, userId: string, matchId: string) {
   const found = await db.match.findFirst({
     where: { id: matchId, stage: { event: { tournament: { ownerId: userId } } } },
-    select: { id: true, team1Id: true, team2Id: true },
+    select: { id: true, team1Id: true, team2Id: true, status: true },
   });
   if (!found) throw notFound("Match");
   return found;

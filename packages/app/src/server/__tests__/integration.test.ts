@@ -288,4 +288,167 @@ describe.skipIf(!url)("against a real database", () => {
       ]);
     });
   });
+  describe("scoring a whole bracket", () => {
+    let counter = 0;
+    type Side = 1 | 2;
+
+    const startBracket = async (teams: number, format: "single" | "double", bestOf = 3) => {
+      const result = await me.event.createWithBracket({
+        tournamentName: `Scoring ${run} ${counter++}`,
+        event: { name: "Scored", bestOf },
+        teams: Array.from({ length: teams }, (_, i) => `Team ${i + 1}`),
+        format,
+      });
+      return result.stageId;
+    };
+    const load = (stageId: string) => prisma.match.findMany({ where: { stageId }, include: { games: true } });
+    const byKey = async (stageId: string) => new Map((await load(stageId)).map((m) => [m.bracketKey!, m]));
+    const teamsOf = (stageId: string) => prisma.team.findMany({ where: { event: { stages: { some: { id: stageId } } } } });
+
+    /** Wins a best-of-3 match in straight games for the given side. */
+    const win = async (matchId: string, side: Side) => {
+      for (const gameNumber of [1, 2]) {
+        const [w, l] = gameNumber === 1 ? [25, 20] : [25, 18];
+        await me.match.recordGame({ matchId, gameNumber, team1Score: side === 1 ? w : l, team2Score: side === 1 ? l : w });
+      }
+    };
+
+    // A small seeded generator so a failing run can be repeated.
+    const rng = (seed: number) => () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    /** Plays every match that has both teams until none are left, choosing winners with pick. */
+    const playOut = async (stageId: string, pick: (m: { team1Id: string | null; team2Id: string | null }) => Side) => {
+      for (;;) {
+        const matches = await load(stageId);
+        const ready = matches.filter((m) => m.status === "SCHEDULED" && m.team1Id && m.team2Id);
+        if (ready.length === 0) {
+          expect(matches.filter((m) => m.status !== "COMPLETED")).toEqual([]); // nothing stuck waiting
+          return matches;
+        }
+        for (const m of ready) await win(m.id, pick(m));
+      }
+    };
+
+    const lossesAfter = async (stageId: string) => {
+      const losses = new Map<string, number>();
+      for (const m of await load(stageId)) {
+        const loser = m.winnerId === m.team1Id ? m.team2Id : m.team1Id;
+        if (loser) losses.set(loser, (losses.get(loser) ?? 0) + 1);
+      }
+      return losses;
+    };
+
+    it("advances winners through a single-elimination bracket to a champion", async () => {
+      const stageId = await startBracket(8, "single");
+      const seed = new Map((await teamsOf(stageId)).map((t) => [t.id, t.seed!]));
+      // The better seed always wins.
+      const matches = await playOut(stageId, (m) => (seed.get(m.team1Id!)! < seed.get(m.team2Id!)! ? 1 : 2));
+      expect(matches).toHaveLength(7);
+      const final = matches.find((m) => m.bracketKey === "r3-m1")!;
+      expect(seed.get(final.winnerId!)).toBe(1);
+      // Semifinals feed the right sides of the final.
+      const semis = ["r2-m1", "r2-m2"].map((k) => matches.find((m) => m.bracketKey === k)!);
+      expect([final.team1Id, final.team2Id]).toEqual(semis.map((m) => m.winnerId));
+      // Everyone but the champion lost exactly once.
+      expect([...(await lossesAfter(stageId)).values()]).toEqual(Array(7).fill(1));
+    });
+
+    it.each([3, 4, 5, 6, 7, 8, 9, 12, 16])("plays a %i-team double-elimination bracket to a champion whoever wins", async (n) => {
+      for (const seed of [1, 2, 3]) {
+        const flip = rng(seed * 1000 + n);
+        const stageId = await startBracket(n, "double");
+        const matches = await playOut(stageId, () => (flip() < 0.5 ? 1 : 2));
+        expect(matches).toHaveLength(2 * n - 2);
+        const final = matches.find((m) => m.bracketKey === "gf-m1")!;
+        const losses = await lossesAfter(stageId);
+        // Nobody plays on after a second loss, and only the grand-final winner and runner-up have fewer than two.
+        expect(Math.max(...losses.values())).toBeLessThanOrEqual(2);
+        const fewer = (await teamsOf(stageId)).filter((t) => (losses.get(t.id) ?? 0) < 2).map((t) => t.id);
+        expect(fewer).toContain(final.winnerId);
+        expect(fewer.length).toBeLessThanOrEqual(2);
+      }
+    });
+
+    it("takes a result back when the deciding game is undone, and replays it", async () => {
+      const stageId = await startBracket(4, "single");
+      const m = (await byKey(stageId)).get("r1-m1")!;
+      await win(m.id, 1);
+      expect((await byKey(stageId)).get("r2-m1")!.team1Id).toBe(m.team1Id);
+
+      // Undo the last point of the deciding game: 25-18 becomes 24-18, no longer finished.
+      await me.match.recordGame({ matchId: m.id, gameNumber: 2, team1Score: 24, team2Score: 18 });
+      const after = await byKey(stageId);
+      expect(after.get("r2-m1")!.team1Id).toBeNull();
+      expect(after.get("r1-m1")).toMatchObject({ status: "IN_PROGRESS", winnerId: null });
+
+      await me.match.recordGame({ matchId: m.id, gameNumber: 2, team1Score: 25, team2Score: 18 });
+      expect((await byKey(stageId)).get("r2-m1")!.team1Id).toBe(m.team1Id);
+    });
+
+    it("won't change a result after the next match has started", async () => {
+      const stageId = await startBracket(4, "single");
+      const first = await byKey(stageId);
+      await win(first.get("r1-m1")!.id, 1);
+      await win(first.get("r1-m2")!.id, 1);
+      const final = (await byKey(stageId)).get("r2-m1")!;
+      await me.match.recordGame({ matchId: final.id, gameNumber: 1, team1Score: 3, team2Score: 2 });
+
+      await expect(
+        me.match.recordGame({ matchId: first.get("r1-m1")!.id, gameNumber: 2, team1Score: 24, team2Score: 18 })
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      const after = await byKey(stageId);
+      expect(after.get("r1-m1")).toMatchObject({ status: "COMPLETED" });
+      expect(after.get("r1-m1")!.games.find((g) => g.gameNumber === 2)).toMatchObject({ team1Score: 25 });
+      expect(after.get("r2-m1")!.team1Id).toBe(after.get("r1-m1")!.winnerId);
+    });
+
+    it("moves a forfeit winner on, and takes them back when it is reopened", async () => {
+      const stageId = await startBracket(4, "single");
+      const m = (await byKey(stageId)).get("r1-m1")!;
+      await me.match.complete({ id: m.id, winnerId: m.team2Id! });
+      expect((await byKey(stageId)).get("r2-m1")!.team1Id).toBe(m.team2Id);
+
+      await me.match.reopen({ id: m.id });
+      const after = await byKey(stageId);
+      expect(after.get("r2-m1")!.team1Id).toBeNull();
+      expect(after.get("r1-m1")).toMatchObject({ status: "SCHEDULED", winnerId: null });
+    });
+
+    it("fills both slots of a match when its two feeders finish at the same time", async () => {
+      const stageId = await startBracket(4, "single");
+      const first = await byKey(stageId);
+      await Promise.all([win(first.get("r1-m1")!.id, 1), win(first.get("r1-m2")!.id, 2)]);
+      const final = (await byKey(stageId)).get("r2-m1")!;
+      expect(final.team1Id).toBe(first.get("r1-m1")!.team1Id);
+      expect(final.team2Id).toBe(first.get("r1-m2")!.team2Id);
+    });
+
+    it("stays consistent when two scorekeepers finish the same game with different scores", async () => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const stageId = await startBracket(4, "single");
+        const m = (await byKey(stageId)).get("r1-m1")!;
+        await me.match.recordGame({ matchId: m.id, gameNumber: 1, team1Score: 25, team2Score: 20 });
+        await Promise.all([
+          me.match.recordGame({ matchId: m.id, gameNumber: 2, team1Score: 25, team2Score: 18 }),
+          me.match.recordGame({ matchId: m.id, gameNumber: 2, team1Score: 18, team2Score: 25 }),
+        ]);
+        const after = await byKey(stageId);
+        const done = after.get("r1-m1")!;
+        const game2 = done.games.find((g) => g.gameNumber === 2)!;
+        // Whichever landed last, the match, the game and the next match all tell the same story.
+        if (game2.team1Score > game2.team2Score) {
+          expect(done).toMatchObject({ status: "COMPLETED", winnerId: m.team1Id });
+        } else {
+          expect(done.status).toBe("IN_PROGRESS"); // 1-1 after the corrected game
+          expect(done.winnerId).toBeNull();
+        }
+        expect(after.get("r2-m1")!.team1Id).toBe(done.winnerId);
+      }
+    });
+  });
 });
