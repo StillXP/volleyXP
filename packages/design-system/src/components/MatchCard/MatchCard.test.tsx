@@ -53,7 +53,9 @@ describe('MatchCard', () => {
 
   it('renders set scores for completed matches', () => {
     render(<MatchCard status="completed" team1={team1} team2={team2} />);
-    expect(screen.getByText('21')).toBeInTheDocument();
+    expect(screen.getAllByText('21')).toHaveLength(2);
+    expect(screen.getByText('18')).toBeInTheDocument();
+    expect(screen.getByText('15')).toBeInTheDocument();
   });
 
   it('bolds only winning scores for each completed set', () => {
@@ -92,9 +94,15 @@ describe('MatchCard', () => {
     expect(screen.getByText('8')).toBeInTheDocument();
   });
 
-  it('does not render seed numbers for upcoming matches', () => {
-    render(<MatchCard status="upcoming" team1={{ seed: 5, name: 'Winner of WB1' }} team2={{ seed: 8, name: 'Winner of WB2' }} />);
-    expect(screen.queryByText('5')).not.toBeInTheDocument();
-    expect(screen.queryByText('8')).not.toBeInTheDocument();
+  it('renders seed numbers for upcoming matches when a seed is provided', () => {
+    render(<MatchCard status="upcoming" team1={{ seed: 5, name: 'Team X' }} team2={{ seed: 8, name: 'Team Y' }} />);
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('8')).toBeInTheDocument();
+  });
+
+  it('omits the seed for placeholder teams in upcoming matches', () => {
+    render(<MatchCard status="upcoming" team1={{ name: 'Winner of WB1', isPlaceholder: true }} team2={{ name: 'Winner of WB2', isPlaceholder: true }} />);
+    expect(screen.getByText('Winner of WB1')).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
   });
 });

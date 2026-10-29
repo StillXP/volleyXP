@@ -13,15 +13,21 @@ const make = (n: number): BracketTeam[] =>
 describe('Bracket', () => {
   it('renders a power-of-2 bracket (8 teams) with all round-1 matches', () => {
     render(<Bracket teams={make(8)} />);
-    // 4 round-1 matches
-    expect(screen.getAllByText(/Round of 16 \d/)).toHaveLength(4);
+    // An 8-team bracket opens with the quarterfinals: 4 + 2 + 1 = 7 matches
+    expect(screen.getByText('Quarterfinal')).toBeInTheDocument();
+    expect(screen.queryByText('Round of 16')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/^W\d+$/)).toHaveLength(7);
+    // The 4 round-1 matches feed the 2 semifinals
+    expect(screen.getAllByText(/^Winner of Quarterfinal - W\d+$/)).toHaveLength(4);
   });
 
   it('renders correct number of rounds for 8 teams', () => {
     render(<Bracket teams={make(8)} />);
     expect(screen.getByText('Final')).toBeInTheDocument();
-    expect(screen.getAllByText(/Semifinal \d/)).toHaveLength(2);
-    expect(screen.getAllByText(/Quarterfinal \d/)).toHaveLength(4);
+    expect(screen.getByText('Semifinal')).toBeInTheDocument();
+    expect(screen.getByText('Quarterfinal')).toBeInTheDocument();
+    // 2 semifinals are fed by the 4 quarterfinals
+    expect(screen.getAllByText(/^Winner of Semifinal - W\d+$/)).toHaveLength(2);
   });
 
   it('renders all team names in round 1', () => {
@@ -101,8 +107,10 @@ describe('Bracket', () => {
   it('renders a 16-team bracket with 4 rounds', () => {
     render(<Bracket teams={make(16)} />);
     expect(screen.getByText('Final')).toBeInTheDocument();
-    expect(screen.getAllByText(/Semifinal \d/).length).toBe(2);
-    expect(screen.getAllByText(/Quarterfinal \d/).length).toBe(4);
-    expect(screen.getAllByText(/Round of 16 \d/).length).toBe(8);
+    for (const round of ['Round of 16', 'Quarterfinal', 'Semifinal']) {
+      expect(screen.getByText(round)).toBeInTheDocument();
+    }
+    // 8 + 4 + 2 + 1 matches
+    expect(screen.getAllByText(/^W\d+$/)).toHaveLength(15);
   });
 });
