@@ -9,12 +9,18 @@ const h = vi.hoisted(() => ({
     event: unknown;
     teams: unknown[];
     matches: unknown[];
+    mine: unknown;
   },
   generate: vi.fn(),
   deleteStage: vi.fn(),
   addTeam: vi.fn(),
   removeTeam: vi.fn(),
   recordGame: vi.fn(),
+  setRegistration: vi.fn(),
+  registerTeam: vi.fn(),
+  // The options the page passes when it asks for the event and its teams.
+  eventOptions: undefined as undefined | { refetchInterval?: (query: { state: { data: unknown } }) => number | false },
+  teamsOptions: undefined as undefined | { refetchInterval?: number | false },
   // The options the page passes when it asks for the bracket's matches.
   matchOptions: undefined as undefined | { enabled?: boolean; refetchInterval?: (query: { state: { data: unknown } }) => number | false },
 }));
@@ -35,10 +41,32 @@ vi.mock("../lib/trpc", () => {
   const invalidate = { invalidate: vi.fn() };
   return {
     trpc: {
-      useUtils: () => ({ event: { getById: invalidate }, team: { getByEvent: invalidate }, match: { getByStage: invalidate } }),
-      event: { getById: { useQuery: () => query(h.state.event) }, generateBracket: { useMutation: () => mutation(h.generate) } },
+      useUtils: () => ({ event: { getById: invalidate }, team: { getByEvent: invalidate }, match: { getByStage: invalidate }, registration: { mine: invalidate } }),
+      event: {
+        getById: {
+          useQuery: (_input: unknown, options: typeof h.eventOptions) => {
+            h.eventOptions = options;
+            return query(h.state.event);
+          },
+        },
+        generateBracket: { useMutation: () => mutation(h.generate) },
+        setRegistration: { useMutation: () => mutation(h.setRegistration) },
+      },
+      registration: {
+        mine: { useQuery: () => query(h.state.mine) },
+        register: { useMutation: () => mutation(h.registerTeam) },
+        rename: { useMutation: () => mutation(vi.fn()) },
+        withdraw: { useMutation: () => mutation(vi.fn()) },
+        leave: { useMutation: () => mutation(vi.fn()) },
+        rotateInvite: { useMutation: () => mutation(vi.fn()) },
+      },
       team: {
-        getByEvent: { useQuery: () => query(h.state.teams) },
+        getByEvent: {
+          useQuery: (_input: unknown, options: typeof h.teamsOptions) => {
+            h.teamsOptions = options;
+            return query(h.state.teams);
+          },
+        },
         create: { useMutation: () => mutation(h.addTeam) },
         delete: { useMutation: () => mutation(h.removeTeam) },
       },
@@ -63,7 +91,7 @@ import EventPage from "../app/event/[id]/page";
 import { expectAccessible } from "./a11y";
 
 const OWNER = "owner";
-const team = (n: number) => ({ id: `t${n}`, name: `Team ${n}`, seed: n, status: "REGISTERED" });
+const team = (n: number) => ({ id: `t${n}`, name: `Team ${n}`, seed: n, status: "REGISTERED", members: [] as unknown[] });
 const event = (stages: unknown[] = []) => ({
   id: "e1",
   name: "Mixed Doubles",
@@ -71,6 +99,7 @@ const event = (stages: unknown[] = []) => ({
   pointsToWin: 25,
   pointsToWinLastGame: 15,
   teamSize: 2,
+  status: "DRAFT",
   tournament: { id: "t", name: "Summer Open", ownerId: OWNER },
   stages,
   courts: [],
@@ -97,7 +126,7 @@ const stored = (n: number, format: "single" | "double", overrides: Record<string
 };
 
 beforeEach(() => {
-  h.state = { userId: null, event: event(), teams: [], matches: [] };
+  h.state = { userId: null, event: event(), teams: [], matches: [], mine: null };
   vi.clearAllMocks();
 });
 afterEach(cleanup);
@@ -108,7 +137,7 @@ describe("event page before a bracket exists", () => {
     h.state.teams = [team(1)];
     render(<EventPage />);
     expect(screen.getByRole("heading", { name: "Mixed Doubles" })).toBeTruthy();
-    expect(screen.getByLabelText("Team name")).toBeTruthy();
+    expect(screen.getByLabelText("Add a team by hand")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Generate bracket" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Add at least two teams first.")).toBeTruthy();
   });
@@ -131,7 +160,7 @@ describe("event page before a bracket exists", () => {
   it("adds a trimmed team name", async () => {
     h.state.userId = OWNER;
     render(<EventPage />);
-    await userEvent.type(screen.getByLabelText("Team name"), "  Spikers ");
+    await userEvent.type(screen.getByLabelText("Add a team by hand"), "  Spikers ");
     await userEvent.click(screen.getByRole("button", { name: "Add team" }));
     expect(h.addTeam).toHaveBeenCalledWith({ eventId: "e1", name: "Spikers" }, expect.anything());
   });
@@ -141,7 +170,7 @@ describe("event page before a bracket exists", () => {
     h.state.teams = [team(1), team(2)];
     render(<EventPage />);
     expect(screen.getByText("Team 1")).toBeTruthy();
-    expect(screen.queryByLabelText("Team name")).toBeNull();
+    expect(screen.queryByLabelText("Add a team by hand")).toBeNull();
     expect(screen.queryByRole("button", { name: "Generate bracket" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
     expect(screen.getByText("The bracket hasn't been generated yet.")).toBeTruthy();
@@ -398,6 +427,169 @@ describe("event page accessibility", () => {
     h.state.event = undefined;
     const { container } = render(<EventPage />);
     await expectAccessible(container);
+  });
+});
+
+describe("event page registration", () => {
+  const withStatus = (status: string) => { h.state.event = { ...event(), status }; };
+  const member = (id: string, name: string, role = "PLAYER") => ({ role, user: { id, name } });
+  const selfRegistered = (n: number, members: unknown[], status = "REGISTERED") => ({ ...team(n), name: `Kim ${n}`, status, members });
+  const ownTeam = () => ({ role: "CAPTAIN", inviteCode: "abc", team: { id: "t1", name: "Kim", status: "REGISTERED", usesDefaultName: true, members: [member("u9", "Alex Kim", "CAPTAIN")] } });
+
+  describe("the organizer's controls", () => {
+    it.each([
+      ["DRAFT", "Open registration", true],
+      ["REGISTRATION", "Close registration", false],
+      ["SEEDING", "Reopen registration", true],
+    ])("on a %s event offers to %s", async (status, label, open) => {
+      h.state.userId = OWNER;
+      withStatus(status);
+      render(<EventPage />);
+      await userEvent.click(screen.getByRole("button", { name: label }));
+      expect(h.setRegistration).toHaveBeenCalledWith({ id: "e1", open });
+    });
+
+    it("is for the organizer only", () => {
+      h.state.userId = "someone-else";
+      render(<EventPage />);
+      expect(screen.queryByRole("button", { name: /registration/i })).toBeNull();
+    });
+
+    it("is gone once the bracket exists", () => {
+      h.state.userId = OWNER;
+      h.state.event = { ...event([{ id: "s1", type: "SINGLE_ELIM" }]), status: "IN_PROGRESS" };
+      h.state.matches = stored(4, "single");
+      render(<EventPage />);
+      expect(screen.queryByRole("button", { name: /registration/i })).toBeNull();
+    });
+  });
+
+  describe("what visitors see", () => {
+    it("tells everyone when registration is open or closed", () => {
+      withStatus("REGISTRATION");
+      const first = render(<EventPage />);
+      expect(screen.getByText("Registration open")).toBeTruthy();
+      first.unmount();
+      withStatus("SEEDING");
+      render(<EventPage />);
+      expect(screen.getByText("Registration closed")).toBeTruthy();
+    });
+
+    it("sends a signed-out visitor to sign in and come back", () => {
+      withStatus("REGISTRATION");
+      render(<EventPage />);
+      expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in?next=%2Fevent%2Fe1");
+    });
+
+    it("lets a signed-in person register a team", async () => {
+      h.state.userId = "u9";
+      withStatus("REGISTRATION");
+      render(<EventPage />);
+      await userEvent.click(screen.getByRole("button", { name: "Register team" }));
+      expect(h.registerTeam).toHaveBeenCalledWith({ eventId: "e1" });
+    });
+
+    it("shows a person their own team once they have one", () => {
+      h.state.userId = "u9";
+      withStatus("REGISTRATION");
+      h.state.mine = ownTeam();
+      render(<EventPage />);
+      expect(screen.getByRole("heading", { name: "Your team" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Register team" })).toBeNull();
+    });
+  });
+
+  describe("the teams", () => {
+    it("shows who is on each team and which still need players", () => {
+      h.state.teams = [
+        selfRegistered(1, [member("u1", "Alex Kim", "CAPTAIN")]),
+        selfRegistered(2, [member("u2", "Sam Lopez", "CAPTAIN"), member("u3", "Ira Reid")]),
+      ];
+      render(<EventPage />);
+      expect(screen.getByText("Alex Kim")).toBeTruthy();
+      expect(screen.getByText("Sam Lopez, Ira Reid")).toBeTruthy();
+      expect(screen.getAllByText("Needs 1 more player")).toHaveLength(1);
+    });
+
+    it("warns the organizer about incomplete rosters before generating, but still allows it", () => {
+      h.state.userId = OWNER;
+      h.state.teams = [
+        selfRegistered(1, [member("u1", "Alex Kim", "CAPTAIN")]),
+        selfRegistered(2, [member("u2", "Sam Lopez", "CAPTAIN")]),
+        selfRegistered(3, [member("a", "A", "CAPTAIN"), member("b", "B")]),
+      ];
+      render(<EventPage />);
+      expect(screen.getByText(/2 teams don't have a full roster yet \(Kim 1, Kim 2\)\. You can still generate the bracket\./)).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Generate bracket" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("says it in the singular for one team", () => {
+      h.state.userId = OWNER;
+      h.state.teams = [selfRegistered(1, [member("u1", "Alex Kim", "CAPTAIN")]), selfRegistered(2, [member("a", "A", "CAPTAIN"), member("b", "B")])];
+      render(<EventPage />);
+      expect(screen.getByText(/1 team doesn't have a full roster yet \(Kim 1\)/)).toBeTruthy();
+    });
+
+    it("says nothing when rosters are full, or the teams were added by hand", () => {
+      h.state.userId = OWNER;
+      h.state.teams = [selfRegistered(1, [member("a", "A", "CAPTAIN"), member("b", "B")]), team(2), team(3)];
+      render(<EventPage />);
+      expect(screen.queryByText(/full roster/)).toBeNull();
+    });
+
+    it("doesn't count a waitlisted team's missing players", () => {
+      h.state.userId = OWNER;
+      h.state.teams = [selfRegistered(1, [member("a", "A", "CAPTAIN"), member("b", "B")]), selfRegistered(2, [member("u2", "Sam", "CAPTAIN")], "WAITLISTED"), team(3)];
+      render(<EventPage />);
+      expect(screen.queryByText(/full roster/)).toBeNull();
+    });
+  });
+
+  describe("keeping up while people sign up", () => {
+    it("refreshes the teams every so often while registration is open, and not otherwise", () => {
+      withStatus("REGISTRATION");
+      const open = render(<EventPage />);
+      expect(h.teamsOptions?.refetchInterval).toBe(15_000);
+      open.unmount();
+      withStatus("DRAFT");
+      render(<EventPage />);
+      expect(h.teamsOptions?.refetchInterval).toBe(false);
+    });
+
+    it("refreshes the event itself on a schedule that follows its status", () => {
+      render(<EventPage />);
+      const interval = (status: string | undefined) => h.eventOptions!.refetchInterval!({ state: { data: status ? { status } : undefined } });
+      expect(interval("REGISTRATION")).toBe(15_000);
+      expect(interval("SEEDING")).toBe(30_000);
+      expect(interval("DRAFT")).toBe(false);
+      expect(interval("IN_PROGRESS")).toBe(false);
+      expect(interval(undefined)).toBe(false);
+    });
+  });
+
+  describe("accessibility", () => {
+    it.each([
+      ["a signed-out visitor to an open event", { userId: null, status: "REGISTRATION" }],
+      ["a signed-in person with no team", { userId: "u9", status: "REGISTRATION" }],
+      ["the organizer of a draft", { userId: OWNER, status: "DRAFT" }],
+    ])("has no violations for %s", async (_label, { userId, status }) => {
+      h.state.userId = userId;
+      withStatus(status);
+      h.state.teams = [
+        selfRegistered(1, [member("u1", "Alex Kim", "CAPTAIN")]),
+        selfRegistered(2, [member("a", "A", "CAPTAIN"), member("b", "B")], "WAITLISTED"),
+      ];
+      const { container } = render(<EventPage />);
+      await expectAccessible(container);
+    });
+
+    it("has no violations for a captain looking at their own team", async () => {
+      h.state.userId = "u9";
+      withStatus("REGISTRATION");
+      h.state.mine = ownTeam();
+      const { container } = render(<EventPage />);
+      await expectAccessible(container);
+    });
   });
 });
 

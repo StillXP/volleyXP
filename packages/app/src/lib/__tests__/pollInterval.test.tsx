@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { LIVE_POLL_MS, WAITING_POLL_MS, matchPollInterval } from "../pollInterval";
+import { CLOSED_POLL_MS, LIVE_POLL_MS, REGISTRATION_POLL_MS, WAITING_POLL_MS, matchPollInterval, registrationPollInterval } from "../pollInterval";
 
 const m = (status: string) => ({ status });
 
@@ -93,5 +93,17 @@ describe("matchPollInterval driving a query", () => {
     expect(calls).toBe(4);
     await advance(WAITING_POLL_MS * 4); // finished: no more requests
     expect(calls).toBe(4);
+  });
+});
+
+describe("registrationPollInterval", () => {
+  it("polls steadily while registration is open, and more slowly once it has closed", () => {
+    expect(registrationPollInterval("REGISTRATION")).toBe(REGISTRATION_POLL_MS);
+    expect(registrationPollInterval("SEEDING")).toBe(CLOSED_POLL_MS);
+    expect(REGISTRATION_POLL_MS).toBeLessThan(CLOSED_POLL_MS);
+  });
+
+  it.each(["DRAFT", "IN_PROGRESS", "COMPLETED", undefined])("doesn't poll for %s", (status) => {
+    expect(registrationPollInterval(status)).toBe(false);
   });
 });

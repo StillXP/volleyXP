@@ -10,9 +10,13 @@ const h = vi.hoisted(() => ({
   signUp: vi.fn(),
   signOut: vi.fn(),
   push: vi.fn(),
+  search: new URLSearchParams(),
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: h.push, refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: h.push, refresh: vi.fn() }),
+  useSearchParams: () => h.search,
+}));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>{children}</a>
@@ -51,6 +55,7 @@ const tournament = (n: number, overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   h.tournaments = [];
+  h.search = new URLSearchParams();
 });
 afterEach(cleanup);
 
@@ -167,5 +172,75 @@ describe("sign-up names", () => {
     await userEvent.type(screen.getByLabelText(/Password/), "correct-horse-battery");
     await userEvent.click(screen.getByRole("button", { name: "Create account" }));
     expect(h.signUp).not.toHaveBeenCalled();
+  });
+});
+
+describe.each([
+  ["sign-in", SignInPage, () => h.signIn, "/sign-up", "Sign up"],
+  ["sign-up", SignUpPage, () => h.signUp, "/sign-in", "Sign in"],
+] as const)("%s going back to where the person came from", (_name, Page, mock, otherPath, otherLabel) => {
+  const submit = async () => {
+    const first = screen.queryByLabelText(/First name/);
+    if (first) {
+      await userEvent.type(first, "Ada");
+      await userEvent.type(screen.getByLabelText(/Last name/), "Lovelace");
+    }
+    await userEvent.type(screen.getByLabelText(/Email/), "ada@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/), "correct-horse-battery");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in$|Create account$/ }));
+  };
+
+  it("goes to the dashboard when nothing says otherwise", async () => {
+    mock().mockResolvedValue({});
+    render(<Page />);
+    await submit();
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/dashboard"));
+  });
+
+  it.each(["/join/abc123", "/event/e1", "/tournament/t1?tab=events"])("goes to %s when asked to", async (next) => {
+    h.search = new URLSearchParams({ next });
+    mock().mockResolvedValue({});
+    render(<Page />);
+    await submit();
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith(next));
+  });
+
+  it.each([
+    ["another site", "https://evil.example/phish"],
+    ["a protocol-relative address", "//evil.example"],
+    ["a script", "javascript:alert(1)"],
+  ])("ignores a request to go to %s", async (_label, next) => {
+    h.search = new URLSearchParams({ next });
+    mock().mockResolvedValue({});
+    render(<Page />);
+    await submit();
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/dashboard"));
+    expect(h.push).not.toHaveBeenCalledWith(next);
+  });
+
+  it("stays put when the server rejects the form", async () => {
+    h.search = new URLSearchParams({ next: "/join/abc123" });
+    mock().mockResolvedValue({ error: { message: "Nope" } });
+    render(<Page />);
+    await submit();
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Nope"));
+    expect(h.push).not.toHaveBeenCalled();
+  });
+
+  it("keeps the destination when switching to the other page", () => {
+    h.search = new URLSearchParams({ next: "/join/abc123" });
+    render(<Page />);
+    expect(screen.getByRole("link", { name: otherLabel }).getAttribute("href")).toBe(`${otherPath}?next=%2Fjoin%2Fabc123`);
+  });
+
+  it("doesn't add a destination to that link when there isn't one", () => {
+    render(<Page />);
+    expect(screen.getByRole("link", { name: otherLabel }).getAttribute("href")).toBe(otherPath);
+  });
+
+  it("doesn't carry a hostile destination across either", () => {
+    h.search = new URLSearchParams({ next: "https://evil.example" });
+    render(<Page />);
+    expect(screen.getByRole("link", { name: otherLabel }).getAttribute("href")).toBe(`${otherPath}?next=%2Fdashboard`);
   });
 });
