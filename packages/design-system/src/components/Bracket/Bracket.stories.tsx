@@ -24,9 +24,6 @@ const meta: Meta<typeof Bracket> = {
     },
   },
   tags: ['autodocs'],
-  argTypes: {
-    colorScheme: { control: 'select', options: ['light', 'dark'] },
-  },
 };
 
 export default meta;
@@ -38,7 +35,6 @@ export const EightTeams: Story = {
   name: '8 Teams (clean bracket)',
   args: {
     teams: makeTeams(8),
-    colorScheme: 'light',
   },
 };
 
@@ -48,7 +44,6 @@ export const SevenTeams: Story = {
   name: '7 Teams (seed 1 bye)',
   args: {
     teams: makeTeams(7),
-    colorScheme: 'light',
   },
 };
 
@@ -58,7 +53,6 @@ export const FiveTeams: Story = {
   name: '5 Teams (seeds 1–3 bye)',
   args: {
     teams: makeTeams(5),
-    colorScheme: 'light',
   },
 };
 
@@ -99,7 +93,6 @@ export const WithResults: Story = {
   args: {
     teams: makeTeams(8),
     matchData: mixedResults,
-    colorScheme: 'light',
   },
 };
 
@@ -109,7 +102,6 @@ export const SixteenTeams: Story = {
   name: '16 Teams',
   args: {
     teams: makeTeams(16),
-    colorScheme: 'light',
   },
 };
 
@@ -120,9 +112,9 @@ export const DarkScheme: Story = {
   args: {
     teams: makeTeams(8),
     matchData: mixedResults,
-    colorScheme: 'dark',
   },
   parameters: {
+    colorMode: 'dark',
     backgrounds: { default: 'dark' },
   },
 };

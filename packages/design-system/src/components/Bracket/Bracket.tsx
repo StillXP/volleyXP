@@ -1,10 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTheme } from 'styled-components';
 import { MatchCard } from '../MatchCard/MatchCard';
-import type { MatchCardColorScheme, MatchCardStatus } from '../MatchCard/MatchCard';
+import type { MatchCardStatus } from '../MatchCard/MatchCard';
 import { MatchView, MatchViewOverlay } from '../MatchView/MatchView';
 import type { MatchViewProps, MatchViewTeam, MatchViewWinnerPath, MatchViewLoserPath } from '../MatchView/MatchView';
-import { defaultTheme } from '../../styles/theme';
+import { cssVars } from '@lockin/tokens';
 import {
   StyledBracket,
   StyledRoundGroup,
@@ -26,8 +25,8 @@ import {
 // CARD_HEIGHT = 8(py) + 85(scorecard) + 4(gap) + 20(footer) + 8(py) = 125
 const CARD_HEIGHT = 125;
 const BASE_GAP = 0;
-const CONNECTOR_HIGHLIGHT_LIGHT = defaultTheme.color.green[500];
-const CONNECTOR_HIGHLIGHT_DARK = defaultTheme.color.green[300];
+const CONNECTOR_STROKE = cssVars.color.border.strong;
+const CONNECTOR_HIGHLIGHT = cssVars.color.border.success;
 
 // Vertical offset from the top of a MatchCard to the centre of its team divider line.
 // 8(card py) + 2(scorecard border) + 40(team row: 8+24+8) + 0.5(divider centre)
@@ -152,7 +151,6 @@ export interface BracketProps {
   teams: BracketTeam[];
   /** Optional match results and metadata, keyed by matchId. */
   matchData?: BracketMatchData[];
-  colorScheme?: MatchCardColorScheme;
   /**
    * Override the assumed MatchCard height (px) used to compute connector positions.
    * Default: 153.
@@ -453,7 +451,6 @@ function buildGrandFinalMatch(
 function buildMatchCardProps(
   match: InternalMatch,
   resultMap: Map<string, BracketMatchData>,
-  colorScheme: MatchCardColorScheme,
   titlesByMatchId: Map<string, string>
 ) {
   const result = resultMap.get(match.matchId);
@@ -478,7 +475,6 @@ function buildMatchCardProps(
   return {
     matchId: match.shortId,
     status,
-    colorScheme,
     team1: {
       ...(t1Display.seed !== undefined && { seed: t1Display.seed }),
       name: t1Display.name,
@@ -688,23 +684,19 @@ interface ConnectorProps {
   roundIndex: number;
   matches: InternalMatch[];
   colHeight: number;
-  colorScheme: MatchCardColorScheme;
   cardHeight: number;
   hoveredTeamMatchIds?: Set<string> | undefined;
 }
 
-function BracketConnector({ roundIndex, matches, colHeight, colorScheme, cardHeight, hoveredTeamMatchIds }: ConnectorProps) {
-  const theme = useTheme();
+function BracketConnector({ roundIndex, matches, colHeight, cardHeight, hoveredTeamMatchIds }: ConnectorProps) {
   const gap = getRoundGap(roundIndex);
   const topPad = getRoundTopPad(roundIndex);
   const pairCount = matches.length / 2;
-  const stroke = theme.color.neutral[900];
-  const highlightStroke = colorScheme === 'dark' ? CONNECTOR_HIGHLIGHT_DARK : CONNECTOR_HIGHLIGHT_LIGHT;
   const xMid = CONNECTOR_WIDTH / 2;
 
   const pathProps = (highlighted: boolean) => highlighted
-    ? { stroke: highlightStroke, strokeWidth: 2, fill: 'none' as const }
-    : { stroke, strokeWidth: 1, strokeDasharray: '4 4', fill: 'none' as const };
+    ? { stroke: CONNECTOR_HIGHLIGHT, strokeWidth: 2, fill: 'none' as const }
+    : { stroke: CONNECTOR_STROKE, strokeWidth: 1, strokeDasharray: '4 4', fill: 'none' as const };
 
   return (
     <svg
@@ -768,17 +760,13 @@ interface LBConnectorProps {
   lbRoundIndex: number; // 0-based index of the FROM round
   matches: InternalMatch[];
   colHeight: number;
-  colorScheme: MatchCardColorScheme;
   cardHeight: number;
   hoveredTeamMatchIds?: Set<string>;
 }
 
-function LBConnector({ lbRoundIndex, matches, colHeight, colorScheme, cardHeight, hoveredTeamMatchIds }: LBConnectorProps) {
-  const theme = useTheme();
+function LBConnector({ lbRoundIndex, matches, colHeight, cardHeight, hoveredTeamMatchIds }: LBConnectorProps) {
   const halvingIndex = Math.floor(lbRoundIndex / 2);
   const nextHalvingIndex = Math.floor((lbRoundIndex + 1) / 2);
-  const stroke = theme.color.neutral[900];
-  const highlightStroke = colorScheme === 'dark' ? CONNECTOR_HIGHLIGHT_DARK : CONNECTOR_HIGHLIGHT_LIGHT;
 
   if (halvingIndex === nextHalvingIndex) {
     // Straight: each match at position i connects directly to the next round's match i.
@@ -800,7 +788,7 @@ function LBConnector({ lbRoundIndex, matches, colHeight, colorScheme, cardHeight
             <line
               key={i}
               x1={0} y1={y} x2={CONNECTOR_WIDTH} y2={y}
-              stroke={highlighted ? highlightStroke : stroke}
+              stroke={highlighted ? CONNECTOR_HIGHLIGHT : CONNECTOR_STROKE}
               strokeWidth={highlighted ? 2 : 1}
               strokeDasharray={highlighted ? undefined : '4 4'}
             />
@@ -817,7 +805,6 @@ function LBConnector({ lbRoundIndex, matches, colHeight, colorScheme, cardHeight
       roundIndex={halvingIndex}
       matches={matches}
       colHeight={colHeight}
-      colorScheme={colorScheme}
       cardHeight={cardHeight}
       hoveredTeamMatchIds={hoveredTeamMatchIds}
     />
@@ -829,7 +816,6 @@ function LBConnector({ lbRoundIndex, matches, colHeight, colorScheme, cardHeight
 interface DoubleBracketLayoutProps {
   teams: BracketTeam[];
   matchData: BracketMatchData[];
-  colorScheme: MatchCardColorScheme;
   cardHeight: number;
   className?: string;
 }
@@ -837,11 +823,9 @@ interface DoubleBracketLayoutProps {
 function DoubleBracketLayout({
   teams,
   matchData,
-  colorScheme,
   cardHeight,
   className,
 }: DoubleBracketLayoutProps) {
-  const theme = useTheme();
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
   const clearHoveredTeam = useCallback(() => setHoveredTeamId(null), []);
 
@@ -942,15 +926,15 @@ function DoubleBracketLayout({
           {wbRounds.map((round, ri) => (
             <Fragment key={ri}>
               <StyledRoundHeader>
-                <StyledRoundHeaderLabel $colorScheme={colorScheme}>{getWBRoundDisplayName(round.roundName, ri)}</StyledRoundHeaderLabel>
-                <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+                <StyledRoundHeaderLabel>{getWBRoundDisplayName(round.roundName, ri)}</StyledRoundHeaderLabel>
+                <StyledRoundHeaderDivider />
               </StyledRoundHeader>
               <StyledRoundHeaderSpacer />
             </Fragment>
           ))}
           <StyledRoundHeader>
-            <StyledRoundHeaderLabel $colorScheme={colorScheme}>Grand Final</StyledRoundHeaderLabel>
-            <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+            <StyledRoundHeaderLabel>Grand Final</StyledRoundHeaderLabel>
+            <StyledRoundHeaderDivider />
           </StyledRoundHeader>
         </StyledRoundHeaders>
         <StyledSectionBody>
@@ -968,7 +952,7 @@ function DoubleBracketLayout({
                       onClick={() => handleMatchSelect(match.matchId)}
                       style={{ cursor: 'pointer' }}
                     >
-                      <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
+                      <MatchCard {...buildMatchCardProps(match, resultMap, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
                     </StyledMatchSlot>
                   ))}
                 </StyledMatchColumn>
@@ -977,7 +961,6 @@ function DoubleBracketLayout({
                     roundIndex={ri}
                     matches={round.matches}
                     colHeight={colHeight}
-                    colorScheme={colorScheme}
                     cardHeight={cardHeight}
                     hoveredTeamMatchIds={hoveredTeamMatchIds}
                   />
@@ -992,8 +975,6 @@ function DoubleBracketLayout({
             const gfColHeight = getColumnHeight(1, wbFinalRoundIndex);
             const gfCardTop = getMatchTop(0, wbFinalRoundIndex, cardHeight);
             const highlighted = !!hoveredTeamId && resultMap.get(wbFinal.matchId)?.winnerId === hoveredTeamId;
-            const stroke = theme.color.neutral[900];
-            const highlightStroke = colorScheme === 'dark' ? CONNECTOR_HIGHLIGHT_DARK : CONNECTOR_HIGHLIGHT_LIGHT;
             const y = gfCardTop + CARD_DIVIDER_OFFSET;
             return (
               <>
@@ -1005,7 +986,7 @@ function DoubleBracketLayout({
                 >
                   <line
                     x1={0} y1={y} x2={CONNECTOR_WIDTH} y2={y}
-                    stroke={highlighted ? highlightStroke : stroke}
+                    stroke={highlighted ? CONNECTOR_HIGHLIGHT : CONNECTOR_STROKE}
                     strokeWidth={highlighted ? 2 : 1}
                     strokeDasharray={highlighted ? undefined : '4 4'}
                   />
@@ -1017,7 +998,7 @@ function DoubleBracketLayout({
                     onClick={() => handleMatchSelect(gfMatch.matchId)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <MatchCard {...buildMatchCardProps(gfMatch, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
+                    <MatchCard {...buildMatchCardProps(gfMatch, resultMap, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
                   </StyledMatchSlot>
                 </StyledMatchColumn>
               </>
@@ -1037,8 +1018,8 @@ function DoubleBracketLayout({
               return visibleRounds.map(({ round, ri }, vi) => (
                 <Fragment key={ri}>
                   <StyledRoundHeader>
-                    <StyledRoundHeaderLabel $colorScheme={colorScheme}>{round.roundName}</StyledRoundHeaderLabel>
-                    <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+                    <StyledRoundHeaderLabel>{round.roundName}</StyledRoundHeaderLabel>
+                    <StyledRoundHeaderDivider />
                   </StyledRoundHeader>
                   {vi < visibleRounds.length - 1 && <StyledRoundHeaderSpacer />}
                 </Fragment>
@@ -1062,7 +1043,7 @@ function DoubleBracketLayout({
                         onClick={() => handleMatchSelect(match.matchId)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <MatchCard {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
+                        <MatchCard {...buildMatchCardProps(match, resultMap, titlesByMatchId)} highlightedTeamId={hoveredTeamId ?? undefined} onTeamHover={setHoveredTeamId} onTeamLeave={clearHoveredTeam} />
                       </StyledMatchSlot>
                     ))}
                   </StyledMatchColumn>
@@ -1071,7 +1052,6 @@ function DoubleBracketLayout({
                       lbRoundIndex={ri}
                       matches={round.matches}
                       colHeight={colHeight}
-                      colorScheme={colorScheme}
                       cardHeight={cardHeight}
                       hoveredTeamMatchIds={hoveredTeamMatchIds}
                     />
@@ -1110,7 +1090,6 @@ function DoubleBracketLayout({
 export function Bracket({
   teams,
   matchData = [],
-  colorScheme = 'light',
   cardHeight = CARD_HEIGHT,
   eliminationFormat = 'single',
   className,
@@ -1120,7 +1099,6 @@ export function Bracket({
       <DoubleBracketLayout
         teams={teams}
         matchData={matchData}
-        colorScheme={colorScheme}
         cardHeight={cardHeight}
         {...(className !== undefined && { className })}
       />
@@ -1203,8 +1181,8 @@ export function Bracket({
         {rounds.map((round, ri) => (
           <Fragment key={ri}>
             <StyledRoundHeader>
-              <StyledRoundHeaderLabel $colorScheme={colorScheme}>{round.roundName}</StyledRoundHeaderLabel>
-              <StyledRoundHeaderDivider $colorScheme={colorScheme} />
+              <StyledRoundHeaderLabel>{round.roundName}</StyledRoundHeaderLabel>
+              <StyledRoundHeaderDivider />
             </StyledRoundHeader>
             {ri < rounds.length - 1 && <StyledRoundHeaderSpacer />}
           </Fragment>
@@ -1227,7 +1205,7 @@ export function Bracket({
                     style={{ cursor: 'pointer' }}
                   >
                     <MatchCard
-                      {...buildMatchCardProps(match, resultMap, colorScheme, titlesByMatchId)}
+                      {...buildMatchCardProps(match, resultMap, titlesByMatchId)}
                       highlightedTeamId={hoveredTeamId ?? undefined}
                       onTeamHover={setHoveredTeamId}
                       onTeamLeave={clearHoveredTeam}
@@ -1240,7 +1218,6 @@ export function Bracket({
                   roundIndex={ri}
                   matches={round.matches}
                   colHeight={colHeight}
-                  colorScheme={colorScheme}
                   cardHeight={cardHeight}
                   hoveredTeamMatchIds={hoveredTeamMatchIds}
                 />

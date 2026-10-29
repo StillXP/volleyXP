@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import type { MatchCardColorScheme } from '../MatchCard/MatchCard';
+import { cssVars } from '@lockin/tokens';
 
 export const CONNECTOR_WIDTH = 56;
 
@@ -9,7 +9,7 @@ export const StyledBracket = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: ${({ theme }) => theme.spacing[4]};
+  padding: ${cssVars.space.md};
 `;
 
 // ─── Round group (match column + connector SVG) ────────────────────────────────
@@ -46,26 +46,23 @@ export const StyledMatchSlot = styled.div<{ $top: number }>`
 export const StyledDoubleBracketWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[8]};
-  padding: ${({ theme }) => theme.spacing[4]};
+  gap: ${cssVars.space.xl};
+  padding: ${cssVars.space.md};
 `;
 
 export const StyledBracketSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[4]};
+  gap: ${cssVars.space.md};
 `;
 
-export const StyledSectionHeading = styled.h2<{ $colorScheme: MatchCardColorScheme }>`
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.semibold};
+export const StyledSectionHeading = styled.h2`
+  font: ${cssVars.typography.overline};
+  letter-spacing: var(--ds-typography-overline-letter-spacing);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[300] : theme.color.neutral[500]};
-  padding-bottom: ${({ theme }) => theme.spacing[3]};
-  border-bottom: 1px solid ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? 'rgba(255,255,255,0.12)' : theme.color.neutral[200]};
+  color: ${cssVars.color.text.secondary};
+  padding-bottom: ${cssVars.space.sm};
+  border-bottom: ${cssVars.border.width.thin} solid ${cssVars.color.border.subtle};
 `;
 
 /** Horizontal row of round groups — no overflow, handled by the outer scroll container. */
@@ -78,7 +75,7 @@ export const StyledSectionBody = styled.div`
 export const StyledGrandFinalSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[4]};
+  gap: ${cssVars.space.md};
 `;
 
 // ─── Per-round column headers ─────────────────────────────────────────────────
@@ -94,25 +91,21 @@ export const StyledRoundHeader = styled.div`
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
 `;
 
-export const StyledRoundHeaderLabel = styled.p<{ $colorScheme: MatchCardColorScheme }>`
+export const StyledRoundHeaderLabel = styled.p`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
+  font: ${cssVars.typography.label.md};
   text-transform: uppercase;
   white-space: nowrap;
-  color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[400] : theme.color.neutral[500]};
+  color: ${cssVars.color.text.secondary};
 `;
 
-export const StyledRoundHeaderDivider = styled.div<{ $colorScheme: MatchCardColorScheme }>`
-  height: 1px;
+export const StyledRoundHeaderDivider = styled.div`
+  height: ${cssVars.border.width.thin};
   width: 100%;
-  background-color: ${({ $colorScheme, theme }) =>
-    $colorScheme === 'dark' ? theme.color.neutral[700] : theme.color.neutral[300]};
+  background-color: ${cssVars.color.border.default};
 `;
 
 export const StyledRoundHeaderSpacer = styled.div`

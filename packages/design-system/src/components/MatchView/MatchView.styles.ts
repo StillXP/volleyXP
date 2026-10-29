@@ -1,8 +1,11 @@
-import type React from 'react';
-import styled, { css, keyframes } from 'styled-components';
-import { Button } from '../Button';
+import styled, { keyframes } from 'styled-components';
+import { cssVars } from '@lockin/tokens';
 
 export type PathOutcome = 'win' | 'loss' | 'neutral';
+
+// Lock In has no z-index tokens; keep layering local to this component.
+const Z_MODAL = 200;
+const Z_TOOLTIP = 300;
 
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
@@ -12,9 +15,9 @@ export const StyledOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: ${({ theme }) => theme.zIndex.modal};
-  padding: ${({ theme }) => theme.spacing[4]};
+  background-color: ${cssVars.color.background.overlay};
+  z-index: ${Z_MODAL};
+  padding: ${cssVars.space.md};
   cursor: default;
   user-select: none;
 `;
@@ -22,22 +25,23 @@ export const StyledOverlay = styled.div`
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export const StyledMatchView = styled.div`
-  background-color: ${({ theme }) => theme.color.neutral[0]};
-  border-radius: ${({ theme }) => theme.border.radius.xl};
+  background-color: ${cssVars.color.surface.raised};
+  border: ${cssVars.border.width.thin} solid ${cssVars.color.border.subtle};
+  border-radius: ${cssVars.radius.xl};
   width: 452px;
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  box-shadow: ${({ theme }) => theme.shadow.lg};
+  box-shadow: ${cssVars.shadow.lg};
 `;
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 export const StyledHeader = styled.div`
   display: flex;
-  gap: ${({ theme }) => theme.spacing[1]};
+  gap: ${cssVars.space['2xs']};
   align-items: flex-end;
-  padding: ${({ theme }) => theme.spacing[4]} ${({ theme }) => theme.spacing[5]};
+  padding: ${cssVars.space.md} ${cssVars.space.lg};
   width: 100%;
 `;
 
@@ -46,58 +50,52 @@ export const StyledHeaderLeft = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[1]};
+  gap: ${cssVars.space['2xs']};
 `;
 
 export const StyledSectionLabel = styled.p`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.color.brand.primary};
+  font: ${cssVars.typography.overline};
+  letter-spacing: var(--ds-typography-overline-letter-spacing);
+  text-transform: uppercase;
+  color: ${cssVars.color.text.brand};
 `;
 
 export const StyledMatchName = styled.p`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xl};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
-  line-height: ${({ theme }) => theme.typography.lineHeight.tight};
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.color.neutral[900]};
+  font: ${cssVars.typography.heading.md};
+  letter-spacing: var(--ds-typography-heading-md-letter-spacing);
+  color: ${cssVars.color.text.primary};
 `;
+
+const statusColor = {
+  completed: cssVars.color.text.success,
+  live: cssVars.color.text.danger,
+  upcoming: cssVars.color.text.info,
+};
 
 export const StyledStatusBadge = styled.span<{ $status: 'upcoming' | 'live' | 'completed' }>`
   flex-shrink: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.semibold};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  font: ${cssVars.typography.overline};
+  letter-spacing: var(--ds-typography-overline-letter-spacing);
   text-transform: uppercase;
   white-space: nowrap;
-
-  ${({ $status, theme }) => {
-    if ($status === 'completed') return css`color: ${theme.color.green[700]};`;
-    if ($status === 'live') return css`color: ${theme.color.red[700]};`;
-    return css`color: ${theme.color.blue[700]};`;
-  }}
+  color: ${({ $status }) => statusColor[$status]};
 `;
 
 // ─── Divider ──────────────────────────────────────────────────────────────────
 
 export const StyledDivider = styled.div`
   width: 100%;
-  height: 1px;
-  background-color: ${({ theme }) => theme.color.neutral[300]};
+  height: ${cssVars.border.width.thin};
+  background-color: ${cssVars.color.border.default};
   flex-shrink: 0;
 `;
 
 // ─── Score section ────────────────────────────────────────────────────────────
 
 export const StyledScoreSection = styled.div`
-  padding: ${({ theme }) => theme.spacing[4]} ${({ theme }) => theme.spacing[5]} ${({ theme }) => theme.spacing[2]};
+  padding: ${cssVars.space.md} ${cssVars.space.lg} ${cssVars.space.xs};
   width: 100%;
 `;
 
@@ -106,17 +104,15 @@ export const StyledScoreSection = styled.div`
 export const StyledMetaRow = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing[1]};
-  padding: 2px ${({ theme }) => theme.spacing[5]};
-  color: ${({ theme }) => theme.color.neutral[500]};
+  gap: ${cssVars.space['2xs']};
+  padding: 2px ${cssVars.space.lg};
+  color: ${cssVars.color.icon.secondary};
 `;
 
 export const StyledMetaText = styled.p`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.regular};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  font: ${cssVars.typography.body.sm};
+  color: ${cssVars.color.text.secondary};
   white-space: nowrap;
 `;
 
@@ -125,78 +121,44 @@ export const StyledMetaText = styled.p`
 export const StyledPathsSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[2]};
-  padding: ${({ theme }) => theme.spacing[2]} ${({ theme }) => theme.spacing[5]} ${({ theme }) => theme.spacing[4]};
+  gap: ${cssVars.space.xs};
+  padding: ${cssVars.space.xs} ${cssVars.space.lg} ${cssVars.space.md};
   width: 100%;
 `;
 
 export const StyledPathsHeading = styled.p`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
+  font: ${cssVars.typography.overline};
+  letter-spacing: var(--ds-typography-overline-letter-spacing);
   text-transform: uppercase;
-  color: ${({ theme }) => theme.color.neutral[500]};
+  color: ${cssVars.color.text.secondary};
 `;
+
+const pathTone = {
+  win: cssVars.color.status.success,
+  loss: cssVars.color.status.danger,
+  neutral: cssVars.color.status.neutral,
+};
 
 export const StyledPathCard = styled.div<{ $outcome: PathOutcome }>`
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 10px ${({ theme }) => theme.spacing[3]};
-  border-radius: ${({ theme }) => theme.border.radius.lg};
-  border: ${({ theme }) => theme.border.width.default} solid;
+  gap: ${cssVars.space.md};
+  padding: ${cssVars.space.xs} ${cssVars.space.sm};
+  border-radius: ${cssVars.radius.md};
+  border: ${cssVars.border.width.thin} solid ${({ $outcome }) => pathTone[$outcome].border};
+  background-color: ${({ $outcome }) => pathTone[$outcome].bg};
   width: 100%;
-
-  ${({ $outcome, theme }) => {
-    const dark = theme.mode === 'dark';
-    switch ($outcome) {
-      case 'win':
-        return css`
-          background-color: ${dark ? theme.color.green[900] : theme.color.green[100]};
-          border-color: ${dark ? theme.color.green[700] : theme.color.green[700]};
-        `;
-      case 'loss':
-        return css`
-          background-color: ${dark ? theme.color.red[900] : theme.color.red[100]};
-          border-color: ${theme.color.red[700]};
-        `;
-      default:
-        return css`
-          background-color: ${theme.color.neutral[200]};
-          border-color: ${theme.color.neutral[300]};
-        `;
-    }
-  }}
 `;
 
 export const StyledPathIconBubble = styled.div<{ $outcome: PathOutcome }>`
   display: flex;
   align-items: center;
-  padding: ${({ theme }) => theme.spacing[2]};
-  border-radius: ${({ theme }) => theme.border.radius.full};
+  padding: ${cssVars.space.xs};
+  border-radius: ${cssVars.radius.full};
   flex-shrink: 0;
-
-  ${({ $outcome, theme }) => {
-    switch ($outcome) {
-      case 'win':
-        return css`
-          background-color: ${theme.color.green[700]};
-          color: #ffffff;
-        `;
-      case 'loss':
-        return css`
-          background-color: ${theme.color.red[900]};
-          color: #ffffff;
-        `;
-      default:
-        return css`
-          background-color: ${theme.color.neutral[300]};
-          color: #ffffff;
-        `;
-    }
-  }}
+  background-color: ${({ $outcome }) => pathTone[$outcome].solid};
+  color: ${({ $outcome }) => pathTone[$outcome].onSolid};
 `;
 
 export const StyledPathInfo = styled.div`
@@ -204,41 +166,21 @@ export const StyledPathInfo = styled.div`
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  line-height: ${({ theme }) => theme.typography.lineHeight.normal};
 `;
 
 export const StyledPathSublabel = styled.p<{ $outcome: PathOutcome }>`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.bold};
+  font: ${cssVars.typography.overline};
+  letter-spacing: var(--ds-typography-overline-letter-spacing);
   text-transform: uppercase;
-
-  ${({ $outcome, theme }) => {
-    const dark = theme.mode === 'dark';
-    switch ($outcome) {
-      case 'win':  return css`color: ${dark ? theme.color.green[100] : theme.color.green[900]};`;
-      case 'loss': return css`color: ${dark ? theme.color.red[100] : theme.color.red[900]};`;
-      default:     return css`color: ${theme.color.neutral[500]};`;
-    }
-  }}
+  color: ${({ $outcome }) => pathTone[$outcome].text};
 `;
 
 export const StyledPathDestination = styled.p`
   margin: 0;
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.sm};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
-  color: ${({ theme }) => theme.color.neutral[900]};
+  font: ${cssVars.typography.label.md};
+  color: ${cssVars.color.text.primary};
 `;
-
-// Inline style applied directly on <Link> to avoid styled(Link) union-type complexity.
-// Values: font-size 14px, font-weight 600, flex-shrink 0
-export const PATH_LINK_STYLE: React.CSSProperties = {
-  flexShrink: 0,
-  fontSize: '14px',
-  fontWeight: 600,
-};
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -246,20 +188,20 @@ export const StyledActions = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: ${({ theme }) => theme.spacing[4]} ${({ theme }) => theme.spacing[5]};
+  padding: ${cssVars.space.md} ${cssVars.space.lg};
   width: 100%;
 
   @media (max-width: 639px) {
     flex-direction: column;
     align-items: stretch;
-    gap: ${({ theme }) => theme.spacing[2]};
+    gap: ${cssVars.space.xs};
   }
 `;
 
 export const StyledButtonGroup = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing[2]};
+  gap: ${cssVars.space.xs};
 
   @media (max-width: 639px) {
     flex-direction: column;
@@ -288,41 +230,17 @@ export const StyledShareTooltip = styled.div`
   position: absolute;
   bottom: calc(100% + 6px);
   right: 0;
-  background-color: ${({ theme }) => theme.color.neutral[900]};
-  color: ${({ theme }) => theme.color.neutral[0]};
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  font-size: ${({ theme }) => theme.typography.fontSize.xs};
-  font-weight: ${({ theme }) => theme.typography.fontWeight.medium};
-  padding: ${({ theme }) => theme.spacing[1]} ${({ theme }) => theme.spacing[2]};
-  border-radius: ${({ theme }) => theme.border.radius.sm};
+  background-color: ${cssVars.color.background.inverse};
+  color: ${cssVars.color.text.inverse};
+  font: ${cssVars.typography.label.sm};
+  padding: ${cssVars.space['2xs']} ${cssVars.space.xs};
+  border-radius: ${cssVars.radius.sm};
   white-space: nowrap;
   pointer-events: none;
-  animation: ${fadeInUp} ${({ theme }) => theme.transition.duration.fast} ${({ theme }) => theme.transition.easing.out};
-  z-index: ${({ theme }) => theme.zIndex.tooltip};
-`;
+  animation: ${fadeInUp} ${cssVars.motion.duration.fast} ${cssVars.motion.easing.enter};
+  z-index: ${Z_TOOLTIP};
 
-// Ghost button with a visible border (for Share and Close in the actions row)
-export const StyledOutlineButton = styled(Button)`
-  && {
-    border-color: ${({ theme }) => theme.color.neutral[300]};
-  }
-`;
-
-// Renders like a standalone Link; used when path navigation triggers an in-bracket callback
-export const StyledPathNavButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: ${({ theme }) => theme.color.brand.primary};
-  font-family: ${({ theme }) => theme.typography.fontFamily.sans};
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
   }
 `;

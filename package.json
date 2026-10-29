@@ -14,5 +14,10 @@
   },
   "devDependencies": {
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@lockin/icons": "file:../../Design System Lock In/packages/icons",
+    "@lockin/react": "file:../../Design System Lock In/packages/react",
+    "@lockin/tokens": "file:../../Design System Lock In/packages/tokens"
   }
 }

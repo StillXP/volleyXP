@@ -1,7 +1,7 @@
 {
   "name": "@design-system/components",
   "version": "0.1.0",
-  "description": "Design system component library",
+  "description": "Volley bracket components built on the Lock In design system",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -19,24 +19,19 @@
   "sideEffects": false,
   "scripts": {
     "build": "vite build",
-    "build:tokens": "tsx scripts/build-tokens.ts",
-    "figma:sync": "tsx scripts/figma-sync.ts",
-    "prebuild": "npm run build:tokens",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test": "vitest",
     "test:run": "vitest run",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx",
-    "demo": "vite --config demo/vite.config.ts"
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "peerDependencies": {
+    "@lockin/react": "*",
+    "@lockin/tokens": "*",
     "react": ">=17",
     "react-dom": ">=17",
     "styled-components": ">=6"
-  },
-  "dependencies": {
-    "polished": "^4.3.1"
   },
   "devDependencies": {
     "@storybook/addon-a11y": "^8.0.0",
@@ -52,14 +47,11 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.2.1",
-    "dotenv": "^16.4.5",
     "jsdom": "^24.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "storybook": "^8.0.0",
-    "style-dictionary": "^4.3.0",
     "styled-components": "^6.3.12",
-    "tsx": "^4.7.3",
     "typescript": "^5.4.5",
     "vite": "^5.2.0",
     "vite-plugin-dts": "^3.9.1",

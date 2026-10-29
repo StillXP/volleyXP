@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon } from '../Icon';
-import { Button } from '../Button';
-import { Link } from '../Link';
+import { Button, Icon, Link } from '@lockin/react';
 import { MatchCard } from '../MatchCard';
 import type { MatchCardStatus } from '../MatchCard';
 import {
@@ -27,10 +25,7 @@ import {
   StyledButtonGroup,
   StyledShareWrapper,
   StyledShareTooltip,
-  StyledOutlineButton,
-  StyledPathNavButton,
   StyledOverlay,
-  PATH_LINK_STYLE,
 } from './MatchView.styles';
 import type { PathOutcome } from './MatchView.styles';
 
@@ -104,10 +99,11 @@ export interface MatchViewProps {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-// Material Design "Live TV" filled icon — matches the Figma spec exactly.
-const LiveTvIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M21 6h-7.59l3.29-3.29L16 2l-4 4-4-4-.71.71L10.59 6H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 14H3V8h18v12zm-10-3.5l6-4.5-6-4.5v9z" />
+// Not in @lockin/icons yet — drawn to match its 24×24 stroke style.
+const MapPinIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
   </svg>
 );
 
@@ -211,13 +207,13 @@ export function MatchView({
       {/* ─── Optional metadata ─── */}
       {startTime && (
         <StyledMetaRow>
-          <Icon name="clock" size={16} />
+          <Icon name="calendar" size="sm" />
           <StyledMetaText>{startTime}</StyledMetaText>
         </StyledMetaRow>
       )}
       {location && (
         <StyledMetaRow>
-          <Icon name="map-pin" size={16} />
+          <MapPinIcon />
           <StyledMetaText>{location}</StyledMetaText>
         </StyledMetaRow>
       )}
@@ -228,7 +224,7 @@ export function MatchView({
 
         <StyledPathCard $outcome={winOutcome}>
           <StyledPathIconBubble $outcome={winOutcome}>
-            <Icon name="check" size={20} />
+            <Icon name="check" size="md" />
           </StyledPathIconBubble>
           <StyledPathInfo>
             <StyledPathSublabel $outcome={winOutcome}>{winnerLabel}</StyledPathSublabel>
@@ -236,12 +232,12 @@ export function MatchView({
           </StyledPathInfo>
           {(winnerPath.onNavigate || winnerPath.href) && (
             winnerPath.onNavigate ? (
-              <StyledPathNavButton onClick={winnerPath.onNavigate} style={PATH_LINK_STYLE}>
-                View <Icon name="chevron-right" size={16} />
-              </StyledPathNavButton>
+              <Button variant="tertiary" size="sm" iconEnd="chevron-right" onClick={winnerPath.onNavigate}>
+                View
+              </Button>
             ) : (
-              <Link href={winnerPath.href!} variant="standalone" style={PATH_LINK_STYLE}>
-                View <Icon name="chevron-right" size={16} />
+              <Link href={winnerPath.href!} variant="standalone">
+                View
               </Link>
             )
           )}
@@ -249,7 +245,7 @@ export function MatchView({
 
         <StyledPathCard $outcome={lossOutcome}>
           <StyledPathIconBubble $outcome={lossOutcome}>
-            <Icon name="close" size={20} />
+            <Icon name="close" size="md" />
           </StyledPathIconBubble>
           <StyledPathInfo>
             <StyledPathSublabel $outcome={lossOutcome}>{loserLabel}</StyledPathSublabel>
@@ -257,12 +253,12 @@ export function MatchView({
           </StyledPathInfo>
           {(loserPath.onNavigate || loserPath.href) && (
             loserPath.onNavigate ? (
-              <StyledPathNavButton onClick={loserPath.onNavigate} style={PATH_LINK_STYLE}>
-                View <Icon name="chevron-right" size={16} />
-              </StyledPathNavButton>
+              <Button variant="tertiary" size="sm" iconEnd="chevron-right" onClick={loserPath.onNavigate}>
+                View
+              </Button>
             ) : (
-              <Link href={loserPath.href!} variant="standalone" style={PATH_LINK_STYLE}>
-                View <Icon name="chevron-right" size={16} />
+              <Link href={loserPath.href!} variant="standalone">
+                View
               </Link>
             )
           )}
@@ -276,7 +272,6 @@ export function MatchView({
         <Button
           variant={videoUrl ? 'primary' : 'secondary'}
           size="sm"
-          iconLeft={<LiveTvIcon />}
           disabled={!videoUrl}
           onClick={videoUrl ? () => window.open(videoUrl, '_blank') : undefined}
         >
@@ -285,20 +280,15 @@ export function MatchView({
 
         <StyledButtonGroup>
           <StyledShareWrapper>
-            <StyledOutlineButton
-              variant="ghost"
-              size="sm"
-              iconLeft={<Icon name="share" size={16} />}
-              onClick={handleShare}
-            >
+            <Button variant="secondary" size="sm" onClick={handleShare}>
               Share
-            </StyledOutlineButton>
+            </Button>
             {showCopied && <StyledShareTooltip>Link Copied</StyledShareTooltip>}
           </StyledShareWrapper>
 
-          <StyledOutlineButton variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Close
-          </StyledOutlineButton>
+          </Button>
         </StyledButtonGroup>
       </StyledActions>
     </StyledMatchView>

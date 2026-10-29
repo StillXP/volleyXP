@@ -17,7 +17,7 @@ const meta: Meta<typeof MatchCard> = {
     docs: {
       description: {
         component:
-          'Displays a sports match with team scores and match status. Supports completed, live, and upcoming states in light and dark color schemes.',
+          'Displays a sports match with team scores and match status. Supports completed, live, and upcoming states in light and dark color modes.',
       },
     },
   },
@@ -28,18 +28,12 @@ const meta: Meta<typeof MatchCard> = {
       options: ['completed', 'live', 'upcoming'],
       description: 'Current match status',
     },
-    colorScheme: {
-      control: 'select',
-      options: ['light', 'dark'],
-      description: 'Light or dark color scheme',
-    },
     matchId: { control: 'text', description: 'Short match identifier badge (e.g. "W1", "L3", "GF")' },
     location: { control: 'text', description: 'Court or venue' },
     startTime: { control: 'text', description: 'Scheduled start time (upcoming only)' },
   },
   args: {
     matchId: 'W1',
-    colorScheme: 'light',
     location: 'Court 2',
     startTime: '12:00 PM',
   },
@@ -83,26 +77,26 @@ export const UpcomingMixed: Story = {
 export const CompletedDark: Story = {
   args: {
     status: 'completed',
-    colorScheme: 'dark',
     team1: completedTeam1,
     team2: completedTeam2,
   },
+  parameters: { colorMode: 'dark' },
 };
 
 export const LiveDark: Story = {
   args: {
     status: 'live',
-    colorScheme: 'dark',
     team1: liveTeam1,
     team2: liveTeam2,
   },
+  parameters: { colorMode: 'dark' },
 };
 
 export const UpcomingDark: Story = {
   args: {
     status: 'upcoming',
-    colorScheme: 'dark',
     team1: upcomingTeam1,
     team2: upcomingTeam2,
   },
+  parameters: { colorMode: 'dark' },
 };

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import NextLink from "next/link";
+import { Button, InputField, Link } from "@lockin/react";
+import { cssVars } from "@lockin/tokens";
 import { getSupabaseBrowserClient } from "../../../lib/supabase/client";
 
 export default function SignInPage() {
@@ -36,77 +38,47 @@ export default function SignInPage() {
   };
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", paddingTop: "4rem" }}>
-      <div style={{ width: "100%", maxWidth: 400, padding: "0 1rem" }}>
-        <h1 style={{ marginBottom: "1.5rem", fontSize: "1.5rem", fontWeight: 700 }}>Sign in</h1>
+    <div style={{ display: "flex", justifyContent: "center", paddingTop: cssVars.space["3xl"] }}>
+      <div style={{ width: "100%", maxWidth: 400, padding: `0 ${cssVars.space.md}` }}>
+        <h1 style={{ marginBottom: cssVars.space.lg, font: cssVars.typography.heading.md, color: cssVars.color.text.primary }}>Sign in</h1>
 
-        <form onSubmit={handleEmailSignIn} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <input
+        <form onSubmit={handleEmailSignIn} style={{ display: "flex", flexDirection: "column", gap: cssVars.space.md }}>
+          <InputField
+            label="Email"
             type="email"
-            placeholder="Email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ padding: "0.625rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "1rem" }}
           />
-          <input
+          <InputField
+            label="Password"
             type="password"
-            placeholder="Password"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ padding: "0.625rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "1rem" }}
           />
-          {error && <p style={{ color: "red", fontSize: "0.875rem", margin: 0 }}>{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: "0.625rem",
-              borderRadius: 6,
-              border: "none",
-              background: "#2563eb",
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: "1rem",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
+          {error && <p role="alert" style={{ font: cssVars.typography.body.sm, color: cssVars.color.text.danger }}>{error}</p>}
+          <Button type="submit" fullWidth loading={loading} loadingLabel="Signing in…">
+            Sign in
+          </Button>
         </form>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", margin: "1.25rem 0" }}>
-          <hr style={{ flex: 1, borderColor: "#e5e7eb" }} />
-          <span style={{ fontSize: "0.875rem", color: "#6b7280" }}>or</span>
-          <hr style={{ flex: 1, borderColor: "#e5e7eb" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: cssVars.space.sm, margin: `${cssVars.space.lg} 0` }}>
+          <hr style={{ flex: 1, border: 0, borderTop: `${cssVars.border.width.thin} solid ${cssVars.color.border.subtle}` }} />
+          <span style={{ font: cssVars.typography.body.sm, color: cssVars.color.text.secondary }}>or</span>
+          <hr style={{ flex: 1, border: 0, borderTop: `${cssVars.border.width.thin} solid ${cssVars.color.border.subtle}` }} />
         </div>
 
-        <button
-          onClick={handleGoogleSignIn}
-          style={{
-            width: "100%",
-            padding: "0.625rem",
-            borderRadius: 6,
-            border: "1px solid #d1d5db",
-            background: "#fff",
-            fontWeight: 600,
-            fontSize: "1rem",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.5rem",
-          }}
-        >
+        <Button variant="secondary" fullWidth onClick={handleGoogleSignIn}>
           <GoogleIcon />
           Continue with Google
-        </button>
+        </Button>
 
-        <p style={{ marginTop: "1.25rem", fontSize: "0.875rem", textAlign: "center", color: "#6b7280" }}>
+        <p style={{ marginTop: cssVars.space.lg, font: cssVars.typography.body.sm, textAlign: "center", color: cssVars.color.text.secondary }}>
           Don&apos;t have an account?{" "}
-          <Link href="/sign-up" style={{ color: "#2563eb", fontWeight: 600 }}>
+          <Link as={NextLink} href="/sign-up">
             Sign up
           </Link>
         </p>
@@ -117,7 +89,7 @@ export default function SignInPage() {
 
 function GoogleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
       <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
       <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z" fill="#FBBC05"/>

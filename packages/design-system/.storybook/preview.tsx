@@ -1,28 +1,43 @@
 import React from 'react';
 import type { Preview } from '@storybook/react';
-import { ThemeProvider } from 'styled-components';
-import { defaultTheme } from '../src/styles/theme';
-import { GlobalStyle } from '../src/styles/GlobalStyle';
+import '@lockin/tokens/css/themes/arena';
+import '@lockin/react/styles.css';
 
 const preview: Preview = {
+  globalTypes: {
+    colorMode: {
+      description: 'Lock In color mode',
+      toolbar: {
+        title: 'Color mode',
+        icon: 'mirror',
+        items: ['light', 'dark'],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: {
+    colorMode: 'light',
+  },
   decorators: [
-    (Story) => (
-      <ThemeProvider theme={defaultTheme}>
-        <GlobalStyle />
-        <Story />
-      </ThemeProvider>
-    ),
+    (Story, context) => {
+      const mode = context.parameters.colorMode ?? context.globals.colorMode;
+      return (
+        <div
+          data-theme={mode}
+          style={{
+            background: 'var(--ds-color-background-default)',
+            color: 'var(--ds-color-text-primary)',
+            font: 'var(--ds-typography-body-md)',
+            padding: 'var(--ds-space-md)',
+          }}
+        >
+          <Story />
+        </div>
+      );
+    },
   ],
   parameters: {
     layout: 'centered',
-    backgrounds: {
-      default: 'light',
-      values: [
-        { name: 'light', value: '#ffffff' },
-        { name: 'gray', value: '#f5f5f5' },
-        { name: 'dark', value: '#0a0a0a' },
-      ],
-    },
     controls: {
       matchers: {
         color: /(background|color)$/i,
