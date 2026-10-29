@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   addTeam: vi.fn(),
   removeTeam: vi.fn(),
   recordGame: vi.fn(),
+  // The options the page passes when it asks for the bracket's matches.
+  matchOptions: undefined as undefined | { enabled?: boolean; refetchInterval?: (query: { state: { data: unknown } }) => number | false },
 }));
 
 const query = (data: unknown) => ({ data, isLoading: false, error: null });
@@ -41,7 +43,12 @@ vi.mock("../lib/trpc", () => {
         delete: { useMutation: () => mutation(h.removeTeam) },
       },
       match: {
-        getByStage: { useQuery: () => query(h.state.matches) },
+        getByStage: {
+          useQuery: (_input: unknown, options: typeof h.matchOptions) => {
+            h.matchOptions = options;
+            return query(h.state.matches);
+          },
+        },
         recordGame: { useMutation: () => ({ mutateAsync: h.recordGame, isPending: false }) },
         complete: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
         reopen: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
@@ -277,6 +284,45 @@ describe("event page scoring", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Score this match" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Point for/ })).toBeNull();
+  });
+});
+
+describe("event page live updates", () => {
+  const withBracket = (matches: unknown[]) => {
+    h.state.event = event([{ id: "s1", type: "SINGLE_ELIM" }]);
+    h.state.matches = matches;
+  };
+  const interval = (matches: unknown) => h.matchOptions!.refetchInterval!({ state: { data: matches } });
+
+  it("refreshes the matches on a schedule that follows what is happening", () => {
+    withBracket(stored(4, "single"));
+    render(<EventPage />);
+    expect(h.matchOptions!.enabled).toBe(true);
+    expect(interval(stored(4, "single"))).toBe(15_000); // none live yet
+    expect(interval(stored(4, "single", { "r1-m1": { status: "IN_PROGRESS" } }))).toBe(3_000);
+    expect(interval(stored(4, "single").map((m) => ({ ...m, status: "COMPLETED" })))).toBe(false);
+    expect(interval(undefined)).toBe(false);
+  });
+
+  it("doesn't ask for matches before there is a bracket", () => {
+    render(<EventPage />);
+    expect(h.matchOptions!.enabled).toBe(false);
+  });
+
+  it("tells viewers the page updates itself while a match is live", () => {
+    withBracket(stored(4, "single", { "r1-m1": { status: "IN_PROGRESS" } }));
+    render(<EventPage />);
+    expect(screen.getByText("Live", { selector: "span, div" })).toBeTruthy();
+    expect(screen.getByText(/Scores update automatically/)).toBeTruthy();
+  });
+
+  it.each([
+    ["nothing has started", stored(4, "single")],
+    ["everything has finished", stored(4, "single").map((m) => ({ ...m, status: "COMPLETED" }))],
+  ])("says nothing about live updates when %s", (_label, matches) => {
+    withBracket(matches);
+    render(<EventPage />);
+    expect(screen.queryByText(/Scores update automatically/)).toBeNull();
   });
 });
 
