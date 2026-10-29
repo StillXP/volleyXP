@@ -195,4 +195,70 @@ describe.skipIf(!url)("against a real database", () => {
       await expect(prisma.match.create({ data: { stageId: result.stageId, nextWinnerMatchId: "x", nextWinnerSlot: 3 } })).rejects.toThrow();
     });
   });
+  describe("event.generateBracket", () => {
+    const newEvent = async (name: string) => {
+      const tournament = await me.tournament.create({ name: `Generate ${name} ${run}` });
+      return (await me.event.create({ tournamentId: tournament.id, name, teamSize: 2 })).id;
+    };
+
+    it("seeds the event's teams in order, leaves out withdrawn ones, and links the matches", async () => {
+      const id = await newEvent("Seeding");
+      const late = await me.team.create({ eventId: id, name: "Late unseeded" });
+      const second = await me.team.create({ eventId: id, name: "Seed five", seed: 5 });
+      const first = await me.team.create({ eventId: id, name: "Seed two", seed: 2 });
+      const early = await me.team.create({ eventId: id, name: "Early unseeded" });
+      const out = await me.team.create({ eventId: id, name: "Withdrawn" });
+      await me.team.update({ id: out.id, status: "WITHDRAWN" });
+
+      const { stageId } = await me.event.generateBracket({ eventId: id, format: "single" });
+
+      const teams = await prisma.team.findMany({ where: { eventId: id }, orderBy: { name: "asc" } });
+      const seedOf = Object.fromEntries(teams.map((t) => [t.name, t.seed]));
+      // Seeds 2 and 5 come first, then the unseeded teams oldest first. Withdrawn is untouched.
+      expect(seedOf).toEqual({ "Seed two": 1, "Seed five": 2, "Late unseeded": 3, "Early unseeded": 4, Withdrawn: null });
+      expect([first.id, second.id, late.id, early.id]).toHaveLength(4);
+
+      const matches = await prisma.match.findMany({ where: { stageId } });
+      expect(matches).toHaveLength(3); // 4 teams, single elimination
+      const placed = matches.flatMap((m) => [m.team1Id, m.team2Id]).filter(Boolean);
+      expect(placed).not.toContain(out.id);
+      expect(new Set(placed)).toEqual(new Set([first.id, second.id, late.id, early.id]));
+    });
+
+    it("refuses a second bracket, and allows regenerating once the first is deleted", async () => {
+      const id = await newEvent("Regenerate");
+      await me.team.create({ eventId: id, name: "A" });
+      await me.team.create({ eventId: id, name: "B" });
+      const { stageId } = await me.event.generateBracket({ eventId: id, format: "single" });
+      await expect(me.event.generateBracket({ eventId: id, format: "double" })).rejects.toMatchObject({ code: "CONFLICT" });
+
+      await me.team.create({ eventId: id, name: "C" });
+      await me.stage.delete({ id: stageId });
+      expect(await prisma.match.count({ where: { stageId } })).toBe(0);
+
+      const again = await me.event.generateBracket({ eventId: id, format: "double" });
+      expect(await prisma.match.count({ where: { stageId: again.stageId } })).toBe(4); // 3 teams, double elimination
+    });
+
+    it("needs at least two teams and leaves nothing behind when it refuses", async () => {
+      const id = await newEvent("Too few");
+      await me.team.create({ eventId: id, name: "Only" });
+      await expect(me.event.generateBracket({ eventId: id, format: "single" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(await prisma.stage.count({ where: { eventId: id } })).toBe(0);
+    });
+
+    it("puts the bracket after existing pool-play stages", async () => {
+      const id = await newEvent("After pools");
+      await me.stage.create({ eventId: id, name: "Pools", type: "POOL_PLAY" });
+      await me.team.create({ eventId: id, name: "A" });
+      await me.team.create({ eventId: id, name: "B" });
+      const { stageId } = await me.event.generateBracket({ eventId: id, format: "single" });
+      expect((await prisma.stage.findUniqueOrThrow({ where: { id: stageId } })).order).toBe(2);
+    });
+
+    it("won't let another user generate it", async () => {
+      const id = await newEvent("Not yours");
+      await expect(as(otherUserId).event.generateBracket({ eventId: id, format: "single" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    });
+  });
 });

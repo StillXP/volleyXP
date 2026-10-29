@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import NextLink from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, InputField, Tag, Toggle, getResolvedColorMode, setColorMode } from "@lockin/react";
+import { Button, InputField, Link, Tag, Toggle, getResolvedColorMode, setColorMode } from "@lockin/react";
 import type { TagTone } from "@lockin/react";
 import { cssVars } from "@lockin/tokens";
 import { trpc } from "../../lib/trpc";
@@ -80,6 +81,7 @@ export default function DashboardPage() {
               style={{
                 display: "flex",
                 alignItems: "center",
+                flexWrap: "wrap",
                 gap: cssVars.space.sm,
                 padding: `${cssVars.space.sm} 0`,
                 borderBottom: `${cssVars.border.width.thin} solid ${cssVars.color.border.subtle}`,
@@ -90,6 +92,15 @@ export default function DashboardPage() {
                 {t.events.length} event{t.events.length !== 1 ? "s" : ""}
               </span>
               <Tag tone={status.tone} size="sm" style={{ marginLeft: "auto" }}>{status.label}</Tag>
+              {t.events.length > 0 && (
+                <ul style={{ flexBasis: "100%", display: "flex", flexWrap: "wrap", gap: cssVars.space.md, listStyle: "none", margin: 0, padding: 0, font: cssVars.typography.body.sm }}>
+                  {t.events.map((e) => (
+                    <li key={e.id}>
+                      <Link as={NextLink} href={`/event/${e.id}`}>{e.name}</Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           );
         })}

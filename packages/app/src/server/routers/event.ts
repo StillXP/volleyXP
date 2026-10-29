@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
 import { assertEventOwner, assertTournamentOwner } from "../ownership";
-import { planBracket, type SlotSource } from "../bracketPlan";
+import { writeBracket } from "../bracketWrite";
 import { EventStatus } from "../../generated/prisma/client";
 
 // A best-of series needs an odd number of games so it can't end level.
@@ -35,14 +35,29 @@ const createWithBracketInput = z
   .refine((v) => !!v.tournamentId !== !!v.tournamentName, "Give either tournamentId or tournamentName");
 
 export const eventRouter = router({
+  // A narrow select, not an include: Prisma's inferred type for the nested include is
+  // deep enough to hit TypeScript's instantiation limit in the client.
   getById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) =>
       ctx.prisma.event.findUniqueOrThrow({
         where: { id: input.id },
-        include: {
-          stages: { orderBy: { order: "asc" }, include: { pools: true } },
-          courts: { include: { court: true } },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          teamSize: true,
+          entryCap: true,
+          status: true,
+          bestOf: true,
+          pointsToWin: true,
+          pointsToWinLastGame: true,
+          tournament: { select: { id: true, name: true, ownerId: true } },
+          stages: {
+            orderBy: { order: "asc" },
+            select: { id: true, name: true, order: true, type: true, advancementCount: true, pools: { select: { id: true, name: true } } },
+          },
+          courts: { select: { court: { select: { id: true, name: true, surface: true } } } },
           _count: { select: { teams: true } },
         },
       })
@@ -90,49 +105,59 @@ export const eventRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST", message: "More teams than the event's entry cap" });
     }
 
-    // Ids are chosen up front so matches can point at teams and at each other in one write.
     const teams = input.teams.map((name, i) => ({ id: randomUUID(), name, seed: i + 1 }));
-    const plan = planBracket(teams, input.format);
-    const matchIds = new Map(plan.map((m) => [m.key, randomUUID()]));
-    const teamId = (source: SlotSource) => (source.kind === "team" ? source.teamId : null);
-    const double = input.format === "double";
 
     return ctx.prisma.$transaction(async (tx) => {
       const tournamentId =
         input.tournamentId ?? (await tx.tournament.create({ data: { name: input.tournamentName!, ownerId: ctx.userId } })).id;
       const event = await tx.event.create({ data: { ...input.event, tournamentId } });
       await tx.team.createMany({ data: teams.map((t) => ({ ...t, eventId: event.id })) });
-      const stage = await tx.stage.create({
-        data: {
-          eventId: event.id,
-          order: 1,
-          name: double ? "Double Elimination" : "Single Elimination",
-          type: double ? "DOUBLE_ELIM" : "SINGLE_ELIM",
-        },
-      });
-      await tx.match.createMany({
-        data: plan.map((m) => ({
-          id: matchIds.get(m.key)!,
-          stageId: stage.id,
-          bracketKey: m.key,
-          bracketRound: m.bracketRound,
-          bracketPosition: m.bracketPosition,
-          team1Id: teamId(m.team1),
-          team2Id: teamId(m.team2),
-          nextWinnerMatchId: m.winnerTo ? matchIds.get(m.winnerTo.matchKey)! : null,
-          nextWinnerSlot: m.winnerTo?.slot ?? null,
-          nextLoserMatchId: m.loserTo ? matchIds.get(m.loserTo.matchKey)! : null,
-          nextLoserSlot: m.loserTo?.slot ?? null,
-        })),
-      });
+      const { stageId } = await writeBracket(tx, { eventId: event.id, teams, format: input.format, order: 1 });
       if (input.nets > 0) {
         const nets = Array.from({ length: input.nets }, (_, i) => ({ id: randomUUID(), name: `Net ${i + 1}` }));
         await tx.court.createMany({ data: nets.map((n) => ({ ...n, eventId: event.id })) });
         await tx.eventCourt.createMany({ data: nets.map((n) => ({ eventId: event.id, courtId: n.id })) });
       }
-      return { tournamentId, eventId: event.id, stageId: stage.id };
+      return { tournamentId, eventId: event.id, stageId };
     });
   }),
+
+  // Builds the bracket from the event's current teams, seeded in their existing order
+  // (unseeded teams last, oldest first). Withdrawn and waitlisted teams sit out. To
+  // redo it, delete the bracket stage first, which is only allowed before games are played.
+  generateBracket: protectedProcedure
+    .input(z.object({ eventId: z.string(), format: z.enum(["single", "double"]) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertEventOwner(ctx.prisma, ctx.userId, input.eventId);
+      return ctx.prisma.$transaction(async (tx) => {
+        const existing = await tx.stage.findFirst({
+          where: { eventId: input.eventId, type: { in: ["SINGLE_ELIM", "DOUBLE_ELIM"] } },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new TRPCError({ code: "CONFLICT", message: "This event already has a bracket. Delete it to generate a new one." });
+        }
+
+        const teams = await tx.team.findMany({
+          where: { eventId: input.eventId, status: { in: ["REGISTERED", "CHECKED_IN"] } },
+          orderBy: [{ seed: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+        });
+        if (teams.length < 2 || teams.length > 64) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A bracket needs between 2 and 64 teams" });
+        }
+
+        // Settle on seeds 1..N so the bracket and the teams agree.
+        const seeded = teams.map((t, i) => ({ id: t.id, name: t.name, seed: i + 1 }));
+        for (const team of seeded) {
+          if (teams.find((t) => t.id === team.id)!.seed !== team.seed) {
+            await tx.team.update({ where: { id: team.id }, data: { seed: team.seed } });
+          }
+        }
+
+        const last = await tx.stage.aggregate({ where: { eventId: input.eventId }, _max: { order: true } });
+        return writeBracket(tx, { eventId: input.eventId, teams: seeded, format: input.format, order: (last._max.order ?? 0) + 1 });
+      });
+    }),
 
   // Sets which fixed (venue) courts the event uses. Temporary courts are managed
   // through the court router and are left alone here.
