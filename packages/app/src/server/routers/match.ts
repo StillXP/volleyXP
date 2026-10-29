@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
+import { assertMatchOwner, assertStageOwner } from "../ownership";
 import { MatchStatus } from "../../generated/prisma/client";
 
 const matchInclude = {
@@ -44,7 +46,20 @@ export const matchRouter = router({
         bracketPosition: z.number().int().optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await assertStageOwner(ctx.prisma, ctx.userId, input.stageId);
+
+      // Teams must belong to the event this stage is part of.
+      const teamIds = [...new Set([input.team1Id, input.team2Id].filter((id): id is string => !!id))];
+      if (teamIds.length > 0) {
+        const valid = await ctx.prisma.team.count({
+          where: { id: { in: teamIds }, event: { stages: { some: { id: input.stageId } } } },
+        });
+        if (valid !== teamIds.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Teams must belong to this stage's event" });
+        }
+      }
+
       const { scheduledTime, ...rest } = input;
       return ctx.prisma.match.create({
         data: { ...rest, scheduledTime: scheduledTime ? new Date(scheduledTime) : undefined },
@@ -54,9 +69,10 @@ export const matchRouter = router({
 
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: z.nativeEnum(MatchStatus) }))
-    .mutation(({ ctx, input }) =>
-      ctx.prisma.match.update({ where: { id: input.id }, data: { status: input.status } })
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
+      return ctx.prisma.match.update({ where: { id: input.id }, data: { status: input.status } });
+    }),
 
   // Record a single game's scores within a match
   recordGame: protectedProcedure
@@ -69,10 +85,14 @@ export const matchRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const winnerId =
-        input.team1Score > input.team2Score
-          ? (await ctx.prisma.match.findUniqueOrThrow({ where: { id: input.matchId } })).team1Id
-          : (await ctx.prisma.match.findUniqueOrThrow({ where: { id: input.matchId } })).team2Id;
+      const match = await assertMatchOwner(ctx.prisma, ctx.userId, input.matchId);
+      if (!match.team1Id || !match.team2Id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Both teams must be set before recording a game" });
+      }
+      if (input.team1Score === input.team2Score) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A game cannot end in a tie" });
+      }
+      const winnerId = input.team1Score > input.team2Score ? match.team1Id : match.team2Id;
 
       return ctx.prisma.game.upsert({
         where: { matchId_gameNumber: { matchId: input.matchId, gameNumber: input.gameNumber } },
@@ -84,11 +104,15 @@ export const matchRouter = router({
   // Mark a match complete and set the winner
   complete: protectedProcedure
     .input(z.object({ id: z.string(), winnerId: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.prisma.match.update({
+    .mutation(async ({ ctx, input }) => {
+      const match = await assertMatchOwner(ctx.prisma, ctx.userId, input.id);
+      if (input.winnerId !== match.team1Id && input.winnerId !== match.team2Id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Winner must be one of the match's teams" });
+      }
+      return ctx.prisma.match.update({
         where: { id: input.id },
         data: { status: "COMPLETED", winnerId: input.winnerId },
         include: matchInclude,
-      })
-    ),
+      });
+    }),
 });

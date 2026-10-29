@@ -19,7 +19,7 @@ const STATUS_TAG: Record<string, { label: string; tone: TagTone }> = {
 export default function DashboardPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const { data: tournaments, refetch } = trpc.tournament.getAll.useQuery();
+  const { data: tournaments, refetch } = trpc.tournament.getMine.useQuery();
   const createTournament = trpc.tournament.create.useMutation({
     onSuccess: () => { setName(""); refetch(); },
   });

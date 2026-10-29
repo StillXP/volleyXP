@@ -11,6 +11,7 @@ export const createContext = (userId: string | null): Context => ({ prisma, user
 const t = initTRPC.context<Context>().create();
 
 export const router = t.router;
+export const createCallerFactory = t.createCallerFactory;
 export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
