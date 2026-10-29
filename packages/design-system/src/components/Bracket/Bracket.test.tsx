@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import { Bracket } from './Bracket';
 import type { BracketTeam, BracketMatchData } from './Bracket';
 
@@ -112,5 +113,62 @@ describe('Bracket', () => {
     }
     // 8 + 4 + 2 + 1 matches
     expect(screen.getAllByText(/^W\d+$/)).toHaveLength(15);
+  });
+});
+
+describe('Bracket renderMatchActions', () => {
+  const open = (container: HTMLElement, matchId: string) =>
+    userEvent.click(container.querySelector(`[data-match-id="${matchId}"]`)!);
+
+  it.each(['single', 'double'] as const)('shows its content in the match view that opens (%s elimination)', async format => {
+    const renderMatchActions = vi.fn((id: string) => <p>Scoring for {id}</p>);
+    const { container } = render(
+      <Bracket teams={make(4)} eliminationFormat={format} renderMatchActions={renderMatchActions} />
+    );
+    // Nothing is rendered until a match is opened.
+    expect(screen.queryByText(/Scoring for/)).toBeNull();
+    expect(renderMatchActions).not.toHaveBeenCalled();
+
+    await open(container, 'r1-m2');
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Scoring for r1-m2')).toBeTruthy();
+    expect(renderMatchActions).toHaveBeenLastCalledWith('r1-m2');
+  });
+
+  it('follows the match that is open', async () => {
+    const { container } = render(
+      <Bracket teams={make(4)} renderMatchActions={id => <p>Scoring for {id}</p>} />
+    );
+    await open(container, 'r1-m1');
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await open(container, 'r1-m2');
+    expect(within(screen.getByRole('dialog')).getByText('Scoring for r1-m2')).toBeTruthy();
+  });
+
+  it('adds nothing to the match view when it is not given', async () => {
+    const { container } = render(<Bracket teams={make(4)} />);
+    await open(container, 'r1-m1');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.queryByText(/Scoring for/)).toBeNull();
+  });
+
+  it('lets the content update with the bracket, so scores show as they are recorded', async () => {
+    const matchData: BracketMatchData[] = [{ matchId: 'r1-m1', status: 'live', team1Score: { setScores: [12], totalSets: 0 }, team2Score: { setScores: [10], totalSets: 0 } }];
+    const { container, rerender } = render(
+      <Bracket teams={make(4)} matchData={matchData} renderMatchActions={() => <p>controls</p>} />
+    );
+    await open(container, 'r1-m1');
+    expect(within(screen.getByRole('dialog')).getByText('12')).toBeTruthy();
+
+    rerender(
+      <Bracket
+        teams={make(4)}
+        matchData={[{ ...matchData[0]!, team1Score: { setScores: [13], totalSets: 0 } }]}
+        renderMatchActions={() => <p>controls</p>}
+      />
+    );
+    expect(within(screen.getByRole('dialog')).getByText('13')).toBeTruthy();
+    expect(within(screen.getByRole('dialog')).getByText('controls')).toBeTruthy();
   });
 });
