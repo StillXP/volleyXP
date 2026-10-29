@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateBracket } from "@design-system/bracket-model";
+import { generateBracket } from "@volley/bracket-model";
 import { planBracket } from "../../server/bracketPlan";
 import { toBracketView, type StoredMatch } from "../bracketView";
 

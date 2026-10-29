@@ -1,4 +1,4 @@
-import type { BracketMatchData, BracketTeam } from "@design-system/bracket-model";
+import type { BracketMatchData, BracketTeam } from "@volley/bracket-model";
 
 interface StoredTeam {
   id: string;

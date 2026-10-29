@@ -1,5 +1,5 @@
 {
-  "name": "@design-system/components",
+  "name": "@volley/bracket",
   "version": "0.1.0",
   "description": "Volley bracket components built on the Lock In design system",
   "type": "module",

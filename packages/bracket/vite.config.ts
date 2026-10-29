@@ -14,14 +14,11 @@ export default defineConfig({
   resolve: {
     // @lockin/* are symlinked from the Lock In repo; resolve their React from this workspace.
     preserveSymlinks: true,
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    },
   },
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
-      name: 'DesignSystem',
+      name: 'VolleyBracket',
       formats: ['es', 'cjs'],
       fileName: (format) => format === 'es' ? 'index.js' : 'index.cjs',
     },

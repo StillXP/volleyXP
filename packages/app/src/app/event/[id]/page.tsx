@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { Button, InputField, Link, RadioGroup, Tag } from "@lockin/react";
 import type { RadioOption } from "@lockin/react";
 import { cssVars } from "@lockin/tokens";
-import { Bracket } from "@design-system/components";
+import { Bracket } from "@volley/bracket";
 import { trpc } from "../../../lib/trpc";
 import { authClient } from "../../../lib/auth-client";
 import { toBracketView } from "../../../lib/bracketView";

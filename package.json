@@ -7,8 +7,8 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=packages/app",
-    "build": "npm run build --workspace=packages/design-system && npm run build --workspace=packages/app",
-    "storybook": "npm run storybook --workspace=packages/design-system",
+    "build": "npm run build --workspace=packages/bracket && npm run build --workspace=packages/app",
+    "storybook": "npm run storybook --workspace=packages/bracket",
     "test": "npm run test:run --workspaces",
     "type-check": "npm run type-check --workspaces",
     "vendor:lockin": "node scripts/vendor-lockin.mjs"

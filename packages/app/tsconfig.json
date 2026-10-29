@@ -19,9 +19,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@design-system/components": ["../design-system/src/index.ts"],
-      "@design-system/bracket-model": ["../design-system/src/bracket-model/index.ts"],
-      "@/*": ["../design-system/src/*"]
+      "@volley/bracket": ["../bracket/src/index.ts"],
+      "@volley/bracket-model": ["../bracket/src/bracket-model/index.ts"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

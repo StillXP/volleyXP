@@ -4,7 +4,7 @@
     "skipLibCheck": true
   },
   "references": [
-    { "path": "./packages/design-system" },
+    { "path": "./packages/bracket" },
     { "path": "./packages/app" }
   ]
 }
