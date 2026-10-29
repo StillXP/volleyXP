@@ -5,6 +5,7 @@ vi.mock("../../lib/prisma", () => ({ prisma: {} }));
 
 import { appRouter } from "../root";
 import { createCallerFactory, type Context } from "../trpc";
+import { ownedFindFirst } from "./helpers";
 
 const OWNER = "user-owner";
 const STRANGER = "user-stranger";
@@ -25,22 +26,7 @@ const matches: Record<string, { team1Id: string | null; team2Id: string | null }
   m2: { team1Id: "tm1", team2Id: null },
 };
 
-/** Finds the ownerId the ownership helpers filter on, wherever it is nested. */
-function ownerInWhere(where: unknown): string | undefined {
-  if (!where || typeof where !== "object") return undefined;
-  for (const [key, value] of Object.entries(where)) {
-    if (key === "ownerId") return value as string;
-    const nested = ownerInWhere(value);
-    if (nested) return nested;
-  }
-  return undefined;
-}
-
-function findFirst(extra: (id: string) => object = () => ({})) {
-  return vi.fn(async ({ where }: { where: { id: string } }) =>
-    ownerOf[where.id] && ownerOf[where.id] === ownerInWhere(where) ? { id: where.id, ...extra(where.id) } : null
-  );
-}
+const findFirst = (extra?: (id: string) => object) => ownedFindFirst(ownerOf, extra);
 
 function setup(userId: string | null) {
   const prisma = {

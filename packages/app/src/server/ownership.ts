@@ -23,12 +23,14 @@ export async function assertEventOwner(db: Db, userId: string, eventId: string) 
   if (!found) throw notFound("Event");
 }
 
+/** Returns the stage's type and event so callers can check format rules. */
 export async function assertStageOwner(db: Db, userId: string, stageId: string) {
   const found = await db.stage.findFirst({
     where: { id: stageId, event: { tournament: { ownerId: userId } } },
-    select: { id: true },
+    select: { id: true, type: true, eventId: true },
   });
   if (!found) throw notFound("Stage");
+  return found;
 }
 
 export async function assertTeamOwner(db: Db, userId: string, teamId: string) {
@@ -49,12 +51,14 @@ export async function assertMatchOwner(db: Db, userId: string, matchId: string) 
   return found;
 }
 
+/** Returns the pool's stage so callers can scope checks to it. */
 export async function assertPoolOwner(db: Db, userId: string, poolId: string) {
   const found = await db.pool.findFirst({
     where: { id: poolId, stage: { event: { tournament: { ownerId: userId } } } },
-    select: { id: true },
+    select: { id: true, stageId: true },
   });
   if (!found) throw notFound("Pool");
+  return found;
 }
 
 export async function assertLocationOwner(db: Db, userId: string, locationId: string) {
