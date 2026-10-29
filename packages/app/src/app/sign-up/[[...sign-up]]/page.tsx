@@ -12,7 +12,8 @@ export default function SignUpPage() {
   useDocumentTitle("Create an account");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -21,11 +22,15 @@ export default function SignUpPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    // Better Auth requires a name; fall back to the part of the email before the @.
+    // Better Auth wants a name too; the server derives the real one from these two.
+    const first = firstName.trim();
+    const last = lastName.trim();
     const { error } = await authClient.signUp.email({
       email,
       password,
-      name: name.trim() || email.split("@")[0],
+      name: `${first} ${last}`,
+      firstName: first,
+      lastName: last,
     });
     setLoading(false);
     if (error) {
@@ -43,12 +48,20 @@ export default function SignUpPage() {
 
         <form onSubmit={handleEmailSignUp} style={{ display: "flex", flexDirection: "column", gap: cssVars.space.md }}>
           <InputField
-            label="Name"
+            label="First name"
             type="text"
-            autoComplete="name"
-            showOptional
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            autoComplete="given-name"
+            required
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+          />
+          <InputField
+            label="Last name"
+            type="text"
+            autoComplete="family-name"
+            required
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
           />
           <InputField
             label="Email"

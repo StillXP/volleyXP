@@ -98,6 +98,11 @@ describe.each([
   it("has no accessibility violations when the server rejects the form, and says why", async () => {
     mock().mockResolvedValue({ error: { message: "Invalid email or password" } });
     const { container } = render(<Page />);
+    const first = screen.queryByLabelText(/First name/);
+    if (first) {
+      await userEvent.type(first, "Ada");
+      await userEvent.type(screen.getByLabelText(/Last name/), "Lovelace");
+    }
     await userEvent.type(screen.getByLabelText(/Email/), "a@b.co");
     await userEvent.type(screen.getByLabelText(/Password/), "wrong-password");
     await userEvent.click(screen.getByRole("button", { name: /Sign in$|Create account$/ }));
@@ -114,5 +119,53 @@ describe("page titles", () => {
   ])("titles %s", (_name, Page, title) => {
     render(<Page />);
     expect(document.title).toBe(title);
+  });
+});
+
+describe("sign-up names", () => {
+  const fill = async (first: string, last: string) => {
+    await userEvent.type(screen.getByLabelText(/First name/), first);
+    await userEvent.type(screen.getByLabelText(/Last name/), last);
+    await userEvent.type(screen.getByLabelText(/Email/), "ada@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/), "correct-horse-battery");
+  };
+
+  it("asks for a first and a last name, both required, and no longer a single name", () => {
+    render(<SignUpPage />);
+    expect((screen.getByLabelText(/First name/) as HTMLInputElement).required).toBe(true);
+    expect((screen.getByLabelText(/Last name/) as HTMLInputElement).required).toBe(true);
+    expect(screen.queryByLabelText(/^Name/)).toBeNull();
+  });
+
+  it("labels them for autofill", () => {
+    render(<SignUpPage />);
+    expect(screen.getByLabelText(/First name/).getAttribute("autocomplete")).toBe("given-name");
+    expect(screen.getByLabelText(/Last name/).getAttribute("autocomplete")).toBe("family-name");
+  });
+
+  it("sends the trimmed names, and the display name Better Auth needs", async () => {
+    h.signUp.mockResolvedValue({});
+    render(<SignUpPage />);
+    await fill("  Ada ", " Lovelace ");
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() =>
+      expect(h.signUp).toHaveBeenCalledWith({
+        email: "ada@example.com",
+        password: "correct-horse-battery",
+        name: "Ada Lovelace",
+        firstName: "Ada",
+        lastName: "Lovelace",
+      })
+    );
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/dashboard"));
+  });
+
+  it("won't submit without both names", async () => {
+    render(<SignUpPage />);
+    await userEvent.type(screen.getByLabelText(/First name/), "Ada");
+    await userEvent.type(screen.getByLabelText(/Email/), "ada@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/), "correct-horse-battery");
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(h.signUp).not.toHaveBeenCalled();
   });
 });
