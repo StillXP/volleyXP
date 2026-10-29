@@ -1,11 +1,23 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
+import { assertTournamentOwner } from "../ownership";
 import { TournamentStatus } from "../../generated/prisma/client";
+
+// Public responses never include the owner's email.
+const publicOwner = { select: { id: true, name: true } } as const;
 
 export const tournamentRouter = router({
   getAll: publicProcedure.query(({ ctx }) =>
     ctx.prisma.tournament.findMany({
-      include: { owner: true, location: true, events: true },
+      include: { owner: publicOwner, location: true, events: true },
+      orderBy: { createdAt: "desc" },
+    })
+  ),
+
+  getMine: protectedProcedure.query(({ ctx }) =>
+    ctx.prisma.tournament.findMany({
+      where: { ownerId: ctx.userId },
+      include: { owner: publicOwner, location: true, events: true },
       orderBy: { createdAt: "desc" },
     })
   ),
@@ -16,7 +28,7 @@ export const tournamentRouter = router({
       ctx.prisma.tournament.findUniqueOrThrow({
         where: { id: input.id },
         include: {
-          owner: true,
+          owner: publicOwner,
           location: { include: { courts: true } },
           events: {
             include: {
@@ -39,16 +51,18 @@ export const tournamentRouter = router({
 
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: z.nativeEnum(TournamentStatus) }))
-    .mutation(({ ctx, input }) =>
-      ctx.prisma.tournament.update({
+    .mutation(async ({ ctx, input }) => {
+      await assertTournamentOwner(ctx.prisma, ctx.userId, input.id);
+      return ctx.prisma.tournament.update({
         where: { id: input.id },
         data: { status: input.status },
-      })
-    ),
+      });
+    }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.prisma.tournament.delete({ where: { id: input.id } })
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await assertTournamentOwner(ctx.prisma, ctx.userId, input.id);
+      return ctx.prisma.tournament.delete({ where: { id: input.id } });
+    }),
 });

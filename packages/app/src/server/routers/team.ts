@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../trpc";
+import { assertEventOwner, assertTeamOwner } from "../ownership";
 import { TeamStatus } from "../../generated/prisma/client";
+
+// Public responses never include a member's email.
+const members = { include: { user: { select: { id: true, name: true } } } } as const;
 
 export const teamRouter = router({
   getByEvent: publicProcedure
@@ -8,7 +12,7 @@ export const teamRouter = router({
     .query(({ ctx, input }) =>
       ctx.prisma.team.findMany({
         where: { eventId: input.eventId },
-        include: { members: { include: { user: true } } },
+        include: { members },
         orderBy: [{ seed: "asc" }, { name: "asc" }],
       })
     ),
@@ -21,12 +25,10 @@ export const teamRouter = router({
         seed: z.number().int().optional(),
       })
     )
-    .mutation(({ ctx, input }) =>
-      ctx.prisma.team.create({
-        data: input,
-        include: { members: { include: { user: true } } },
-      })
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await assertEventOwner(ctx.prisma, ctx.userId, input.eventId);
+      return ctx.prisma.team.create({ data: input, include: { members } });
+    }),
 
   update: protectedProcedure
     .input(
@@ -37,14 +39,16 @@ export const teamRouter = router({
         status: z.nativeEnum(TeamStatus).optional(),
       })
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      await assertTeamOwner(ctx.prisma, ctx.userId, id);
       return ctx.prisma.team.update({ where: { id }, data });
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.prisma.team.delete({ where: { id: input.id } })
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await assertTeamOwner(ctx.prisma, ctx.userId, input.id);
+      return ctx.prisma.team.delete({ where: { id: input.id } });
+    }),
 });
