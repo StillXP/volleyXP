@@ -1,15 +1,25 @@
 import path from "path";
 import { defineConfig } from "vitest/config";
 
+const designSystem = path.resolve(__dirname, "../design-system/src");
+
 export default defineConfig({
+  // Next compiles JSX itself; tests need the automatic runtime so files needn't import React.
+  esbuild: { jsx: "automatic" },
   resolve: {
+    // @lockin/* are symlinked from the Lock In repo; resolve their React from this workspace.
+    preserveSymlinks: true,
+    dedupe: ["react", "react-dom"],
     alias: {
-      // Pure bracket structure, shared with the UI; resolved from source like Next does.
-      "@design-system/bracket-model": path.resolve(__dirname, "../design-system/src/bracket-model/index.ts"),
+      // Resolved from source, like Next does (see next.config.ts).
+      "@design-system/bracket-model": path.join(designSystem, "bracket-model/index.ts"),
+      "@design-system/components": path.join(designSystem, "index.ts"),
     },
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    // Lock In ships bundler-style ESM (extensionless imports); let Vite transform it.
+    server: { deps: { inline: [/@lockin\//] } },
   },
 });
