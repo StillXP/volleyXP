@@ -1,7 +1,7 @@
 import path from "path";
 import { defineConfig } from "vitest/config";
 
-const designSystem = path.resolve(__dirname, "../design-system/src");
+const bracketSrc = path.resolve(__dirname, "../bracket/src");
 
 export default defineConfig({
   // Next compiles JSX itself; tests need the automatic runtime so files needn't import React.
@@ -12,8 +12,8 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
     alias: {
       // Resolved from source, like Next does (see next.config.ts).
-      "@design-system/bracket-model": path.join(designSystem, "bracket-model/index.ts"),
-      "@design-system/components": path.join(designSystem, "index.ts"),
+      "@volley/bracket-model": path.join(bracketSrc, "bracket-model/index.ts"),
+      "@volley/bracket": path.join(bracketSrc, "index.ts"),
     },
   },
   test: {

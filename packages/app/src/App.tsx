@@ -5,8 +5,8 @@ import styled from 'styled-components'
 import { Button, InputField, RadioGroup } from '@lockin/react'
 import type { RadioOption } from '@lockin/react'
 import { cssVars } from '@lockin/tokens'
-import { Bracket } from '@design-system/components'
-import type { BracketTeam, BracketMatchData } from '@design-system/components'
+import { Bracket } from '@volley/bracket'
+import type { BracketTeam, BracketMatchData } from '@volley/bracket'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

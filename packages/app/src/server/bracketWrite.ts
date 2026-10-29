@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BracketTeam } from "@design-system/bracket-model";
+import type { BracketTeam } from "@volley/bracket-model";
 import type { Prisma } from "../generated/prisma/client";
 import { planBracket, type EliminationFormat, type SlotSource } from "./bracketPlan";
 

@@ -4,8 +4,8 @@ import {
   generateLBRounds,
   getWBRoundDisplayName,
   isByeMatch,
-} from "@design-system/bracket-model";
-import type { BracketTeam, InternalMatch, InternalSlot } from "@design-system/bracket-model";
+} from "@volley/bracket-model";
+import type { BracketTeam, InternalMatch, InternalSlot } from "@volley/bracket-model";
 
 export type EliminationFormat = "single" | "double";
 

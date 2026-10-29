@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import type { BracketTeam, BracketMatchData, BracketMatchScore } from '@design-system/components'
+import type { BracketTeam, BracketMatchData, BracketMatchScore } from '@volley/bracket'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
